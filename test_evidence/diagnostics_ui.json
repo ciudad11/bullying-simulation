@@ -1,0 +1,162 @@
+{
+  "steps": [
+    {
+      "step": "setup",
+      "data": {
+        "scenario": "scenario_1",
+        "level1": true,
+        "useLlm": false,
+        "startVisible": true
+      }
+    },
+    {
+      "step": "round1",
+      "data": {
+        "session_id": "76f02b68",
+        "panel": {
+          "round": "1",
+          "intensity": "15%",
+          "frequency": "15%",
+          "checkIntensity": "强度✓",
+          "checkFrequency": "频率✓",
+          "streak": "连续 0/3",
+          "remaining": "还差 3 轮",
+          "gap": "卡点：连续达标进行中，还需 3 轮",
+          "badge": "运行中",
+          "autoendDisplay": "none"
+        }
+      }
+    },
+    {
+      "step": "config_applied",
+      "data": {
+        "response": {
+          "success": true,
+          "config": {
+            "bullying_stopped_rounds": 3,
+            "intervention_effective_rounds": 4,
+            "victim_crisis_threshold": 0.95,
+            "victim_crisis_rounds": 3,
+            "max_rounds": 40,
+            "min_rounds": 3
+          },
+          "convergence": {
+            "bullying_intensity_max": 0.2,
+            "attack_frequency_max": 0.1,
+            "victim_safety_min": 0.7,
+            "retaliation_risk_max": 0.3,
+            "follow_up_status_min": 0.5,
+            "partial_round_min": 10,
+            "partial_intensity_max": 0.3
+          },
+          "applied": {
+            "attack_frequency_max": 0.1
+          }
+        },
+        "status_thresholds": {
+          "attack_frequency_max": 0.1,
+          "bullying_intensity_max": 0.2,
+          "required": 3
+        }
+      }
+    },
+    {
+      "step": "round2",
+      "data": {
+        "round": "2",
+        "intensity": "15%",
+        "frequency": "15%",
+        "checkIntensity": "强度✓",
+        "checkFrequency": "频率✗",
+        "streak": "连续 0/3",
+        "remaining": "还差 3 轮",
+        "gap": "卡点：攻击频率 15%（需 <10%）",
+        "badge": "运行中",
+        "autoendDisplay": "none"
+      }
+    },
+    {
+      "step": "round3",
+      "data": {
+        "round": "3",
+        "intensity": "15%",
+        "frequency": "15%",
+        "checkIntensity": "强度✓",
+        "checkFrequency": "频率✗",
+        "streak": "连续 0/3",
+        "remaining": "还差 3 轮",
+        "gap": "卡点：攻击频率 15%（需 <10%）",
+        "badge": "运行中",
+        "autoendDisplay": "none"
+      }
+    },
+    {
+      "step": "round4",
+      "data": {
+        "round": "4",
+        "intensity": "15%",
+        "frequency": "15%",
+        "checkIntensity": "强度✓",
+        "checkFrequency": "频率✗",
+        "streak": "连续 0/3",
+        "remaining": "还差 3 轮",
+        "gap": "卡点：攻击频率 15%（需 <10%）",
+        "badge": "运行中",
+        "autoendDisplay": "none"
+      }
+    },
+    {
+      "step": "round5",
+      "data": {
+        "round": "5",
+        "intensity": "15%",
+        "frequency": "15%",
+        "checkIntensity": "强度✓",
+        "checkFrequency": "频率✗",
+        "streak": "连续 0/3",
+        "remaining": "还差 3 轮",
+        "gap": "卡点：攻击频率 15%（需 <10%）",
+        "badge": "运行中",
+        "autoendDisplay": "none"
+      }
+    },
+    {
+      "step": "round6",
+      "data": {
+        "round": "6",
+        "intensity": "15%",
+        "frequency": "15%",
+        "checkIntensity": "强度✓",
+        "checkFrequency": "频率✗",
+        "streak": "连续 0/3",
+        "remaining": "还差 3 轮",
+        "gap": "卡点：攻击频率 15%（需 <10%）",
+        "badge": "运行中",
+        "autoendDisplay": "none"
+      }
+    },
+    {
+      "step": "intervention_flow",
+      "data": {
+        "decision_click": {
+          "clicked": true,
+          "text": "✋ 需要干预"
+        },
+        "intervention_count": 2,
+        "round": 7,
+        "teacherMessage": true
+      }
+    },
+    {
+      "step": "manual_stop",
+      "data": {
+        "badge": "已结束",
+        "autoendDisplay": "none",
+        "reportModalActive": false,
+        "hasEndMarker": true
+      }
+    }
+  ],
+  "session_id": "76f02b68",
+  "js_errors": []
+}

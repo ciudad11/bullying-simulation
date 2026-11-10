@@ -1,0 +1,1660 @@
+{
+ "summary": {
+  "total_messages": 17,
+  "intervention_count": 0,
+  "skip_count": 4,
+  "total_decision_count": 4,
+  "bullying_intensity": 0.15,
+  "victim_distress": 0.0,
+  "intervention_effectiveness": 0,
+  "hostile_messages": 0
+ },
+ "obvq_analysis": {
+  "total_score": 36,
+  "dimension_totals": [
+   0,
+   36,
+   0,
+   0,
+   0,
+   0
+  ],
+  "dimension_averages": [
+   0.0,
+   1.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "dimension_analysis": [
+   {
+    "name": "身体欺负",
+    "total": 0,
+    "average": 0.0,
+    "level": "低",
+    "description": "未出现身体欺负行为"
+   },
+   {
+    "name": "言语欺负",
+    "total": 36,
+    "average": 1.0,
+    "level": "高",
+    "description": "言语攻击频繁且激烈，造成严重伤害"
+   },
+   {
+    "name": "关系欺负",
+    "total": 0,
+    "average": 0.0,
+    "level": "低",
+    "description": "同学关系和谐"
+   },
+   {
+    "name": "网络欺负",
+    "total": 0,
+    "average": 0.0,
+    "level": "低",
+    "description": "未涉及网络欺负"
+   },
+   {
+    "name": "权力欺负",
+    "total": 0,
+    "average": 0.0,
+    "level": "低",
+    "description": "权力关系平等"
+   },
+   {
+    "name": "偏见欺负",
+    "total": 0,
+    "average": 0.0,
+    "level": "低",
+    "description": "未出现偏见性言论"
+   }
+  ],
+  "recommendation": "欺凌类型集中在：言语欺负，建议针对这些类型的欺凌行为采取相应干预策略。"
+ },
+ "intervention_analysis": {
+  "summary": "本次模拟共 4 轮决策，全部选择了跳过干预（共 4 次）。",
+  "suggestions": [
+   "全部轮次均跳过干预：请在出现可识别的欺凌信号时练习介入，并给出「行为定性 + 明确停止要求」。",
+   "若判断现场确实无需介入，请在复盘中说明判断依据。"
+  ],
+  "action_plan": [
+   "下一场模拟：至少完成一次包含「行为定性 + 停止要求」的介入。"
+  ],
+  "effectiveness_trend": [],
+  "skip_count": 4,
+  "total_decisions": 4
+ },
+ "trends": {
+  "summary": "欺凌强度：欺凌强度基本持平：15% → 15%（变化 +0.0 个百分点，未超过 2 个百分点的稳定阈值）；受害者压力：受害者压力下降 9.0 个百分点：9% → 0%。（观察窗口：首个有效快照至最终有效快照，共 5 个快照；模拟状态变化不等于教师能力评分。）",
+  "bullying_trend": "欺凌强度基本持平：15% → 15%（变化 +0.0 个百分点，未超过 2 个百分点的稳定阈值）",
+  "distress_trend": "受害者压力下降 9.0 个百分点：9% → 0%",
+  "bullying_metric": {
+   "baseline": 0.15,
+   "final": 0.15,
+   "delta_percentage_points": 0.0,
+   "valid_sample_count": 5,
+   "source_window": "首个有效快照至最终有效快照",
+   "direction": "stable",
+   "text": "欺凌强度基本持平：15% → 15%（变化 +0.0 个百分点，未超过 2 个百分点的稳定阈值）"
+  },
+  "distress_metric": {
+   "baseline": 0.09,
+   "final": 0.0,
+   "delta_percentage_points": -9.0,
+   "valid_sample_count": 5,
+   "source_window": "首个有效快照至最终有效快照",
+   "direction": "down",
+   "text": "受害者压力下降 9.0 个百分点：9% → 0%"
+  },
+  "early_bullying": 0.15,
+  "late_bullying": 0.15,
+  "bullying_change": 0.0,
+  "early_distress": 0.09,
+  "late_distress": 0.0,
+  "distress_change": -0.09,
+  "obvq_trends": [
+   {
+    "name": "身体欺负",
+    "index": 0,
+    "baseline": 0,
+    "final": 0,
+    "change": 0,
+    "direction": "stable"
+   },
+   {
+    "name": "言语欺负",
+    "index": 1,
+    "baseline": 0,
+    "final": 0,
+    "change": 0,
+    "direction": "stable"
+   },
+   {
+    "name": "关系欺负",
+    "index": 2,
+    "baseline": 0,
+    "final": 0,
+    "change": 0,
+    "direction": "stable"
+   },
+   {
+    "name": "网络欺负",
+    "index": 3,
+    "baseline": 0,
+    "final": 0,
+    "change": 0,
+    "direction": "stable"
+   },
+   {
+    "name": "权力欺负",
+    "index": 4,
+    "baseline": 0,
+    "final": 0,
+    "change": 0,
+    "direction": "stable"
+   },
+   {
+    "name": "偏见欺负",
+    "index": 5,
+    "baseline": 0,
+    "final": 0,
+    "change": 0,
+    "direction": "stable"
+   }
+  ],
+  "intervention_impact": [],
+  "valid_sample_count": 5,
+  "source_window": "首个有效快照至最终有效快照",
+  "stable_threshold_pp": 2.0,
+  "unit_note": "变化以「百分点」表述；欺凌强度/受害者压力为 0–1 状态比例。"
+ },
+ "metrics": {
+  "bullying_intensity": 0.15,
+  "victim_distress": 0.0,
+  "bystander_intervention": 0.0,
+  "round": 5,
+  "finished": true,
+  "termination_reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。",
+  "result_type": "success",
+  "attack_frequency": 0.15,
+  "attack_severity": 0.15,
+  "persistence": 0.15,
+  "victim_safety": 0.0,
+  "follow_up_status": 0.0,
+  "retaliation_risk": 0.0,
+  "bullying_stopped_rounds": 3,
+  "bullying_stopped_required": 3,
+  "attack_frequency_max": 0.2,
+  "bullying_intensity_max": 0.2,
+  "remaining_to_stop": 0,
+  "obvq_total_score": 36,
+  "obvq_dimension_totals": [
+   0,
+   36,
+   0,
+   0,
+   0,
+   0
+  ],
+  "obvq_dimension_averages": [
+   0.0,
+   1.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "messages": [
+  {
+   "id": "scenario_0",
+   "sender": "System",
+   "role": "system",
+   "content": "[Scenario] 美术课上的嘲笑: 【背景】美术课上，老师让同学依次展示自己的画作，被霸凌者认真画了一幅画，轮到展示。\n【霸凌者】你觉得她的画很丑，想当众取笑她，并带动其他同学一起哄笑。\n【受害者】你对自己的画挺在意，被当众嘲笑后感到难堪和委屈。\n【正义旁观者】你觉得当众嘲笑别人的画很过分，想替她说话。\n【从众旁观者】你看到有人起哄，犹豫要不要跟着笑。",
+   "timestamp": "17:01:30",
+   "hostile_score": 0,
+   "emotions": []
+  },
+  {
+   "id": "system_0",
+   "sender": "系统",
+   "role": "system",
+   "role_name": "system",
+   "role_icon": "💬",
+   "content": "[场景] 美术课上的嘲笑：【背景】美术课上，老师让同学依次展示自己的画作，被霸凌者认真画了一幅画，轮到展示。\n【霸凌者】你觉得她的画很丑，想当众取笑她，并带动其他同学一起哄笑。\n【受害者】你对自己的画挺在意，被当众嘲笑后感到难堪和委屈。\n【正义旁观者】你觉得当众嘲笑别人的画很过分，想替她说话。\n【从众旁观者】你看到有人起哄，犹豫要不要跟着笑。",
+   "timestamp": "17:01:30",
+   "round": 0
+  },
+  {
+   "id": "bully_1",
+   "sender": "徐凯",
+   "role": "bully",
+   "role_name": "霸凌者",
+   "role_icon": "😈",
+   "content": "这画得也太丑了吧,哈哈哈!",
+   "timestamp": "17:01:30",
+   "round": 1
+  },
+  {
+   "id": "bystander_b_1",
+   "sender": "刘洋",
+   "role": "bystander_b",
+   "role_name": "从众旁观者",
+   "role_icon": "👀",
+   "content": "(跟着笑)哈哈哈...",
+   "timestamp": "17:01:30",
+   "round": 1
+  },
+  {
+   "id": "victim_1",
+   "sender": "林小满",
+   "role": "victim",
+   "role_name": "受害者",
+   "role_icon": "😢",
+   "content": "(低着头不说话)",
+   "timestamp": "17:01:30",
+   "round": 1
+  },
+  {
+   "id": "bystander_a_2",
+   "sender": "苏晴",
+   "role": "bystander_a",
+   "role_name": "正义旁观者",
+   "role_icon": "✨",
+   "content": "我觉得挺有想象力的。",
+   "timestamp": "17:01:44",
+   "round": 2
+  },
+  {
+   "id": "bully_2",
+   "sender": "徐凯",
+   "role": "bully",
+   "role_name": "霸凌者",
+   "role_icon": "😈",
+   "content": "切,有什么了不起的。",
+   "timestamp": "17:01:44",
+   "round": 2
+  },
+  {
+   "id": "victim_2",
+   "sender": "林小满",
+   "role": "victim",
+   "role_name": "受害者",
+   "role_icon": "😢",
+   "content": "(低着头不说话)",
+   "timestamp": "17:01:44",
+   "round": 2
+  },
+  {
+   "id": "bystander_b_3",
+   "sender": "刘洋",
+   "role": "bystander_b",
+   "role_name": "从众旁观者",
+   "role_icon": "👀",
+   "content": "(跟着笑)哈哈哈...",
+   "timestamp": "17:02:02",
+   "round": 3
+  },
+  {
+   "id": "bully_3",
+   "sender": "徐凯",
+   "role": "bully",
+   "role_name": "霸凌者",
+   "role_icon": "😈",
+   "content": "切,有什么了不起的。",
+   "timestamp": "17:02:02",
+   "round": 3
+  },
+  {
+   "id": "victim_3",
+   "sender": "林小满",
+   "role": "victim",
+   "role_name": "受害者",
+   "role_icon": "😢",
+   "content": "(小声)我...我没有...",
+   "timestamp": "17:02:02",
+   "round": 3
+  },
+  {
+   "id": "bystander_a_4",
+   "sender": "苏晴",
+   "role": "bystander_a",
+   "role_name": "正义旁观者",
+   "role_icon": "✨",
+   "content": "我觉得挺有想象力的。",
+   "timestamp": "17:02:17",
+   "round": 4
+  },
+  {
+   "id": "bully_4",
+   "sender": "徐凯",
+   "role": "bully",
+   "role_name": "霸凌者",
+   "role_icon": "😈",
+   "content": "切,有什么了不起的。",
+   "timestamp": "17:02:17",
+   "round": 4
+  },
+  {
+   "id": "victim_4",
+   "sender": "林小满",
+   "role": "victim",
+   "role_name": "受害者",
+   "role_icon": "😢",
+   "content": "(低着头不说话)",
+   "timestamp": "17:02:17",
+   "round": 4
+  },
+  {
+   "id": "bystander_b_5",
+   "sender": "刘洋",
+   "role": "bystander_b",
+   "role_name": "从众旁观者",
+   "role_icon": "👀",
+   "content": "好像是有点好笑...",
+   "timestamp": "17:02:32",
+   "round": 5
+  },
+  {
+   "id": "bully_5",
+   "sender": "徐凯",
+   "role": "bully",
+   "role_name": "霸凌者",
+   "role_icon": "😈",
+   "content": "切,有什么了不起的。",
+   "timestamp": "17:02:32",
+   "round": 5
+  },
+  {
+   "id": "victim_5",
+   "sender": "林小满",
+   "role": "victim",
+   "role_name": "受害者",
+   "role_icon": "😢",
+   "content": "(低着头不说话)",
+   "timestamp": "17:02:32",
+   "round": 5
+  }
+ ],
+ "interventions": [],
+ "session_duration": "0:21:40.919088",
+ "total_rounds": 5,
+ "ability_assessment": {
+  "discovery": {
+   "level": "needs_improvement",
+   "response_delay": null,
+   "opportunity_round": 1,
+   "description": "第 1 轮已出现针对学生的攻击性发言，但本次未进行任何干预——存在未识别或未介入的问题。"
+  },
+  "intervention": {
+   "level": "needs_improvement",
+   "count": 0,
+   "rubric_score": null,
+   "band": null,
+   "passed_count": null,
+   "description": "未进行任何干预，本次没有可评价的干预行为。"
+  },
+  "victim_protection": {
+   "level": "not_assessed",
+   "score": null,
+   "description": "本次没有完成的 D2（受害者保护与心理支持）量规评分。"
+  }
+ },
+ "round_analysis": [
+  {
+   "round": 1,
+   "has_intervention": false,
+   "score": null,
+   "band": null,
+   "raw_score": null,
+   "risk_level": null,
+   "risk_cap_applied": false,
+   "dialogue_counts": {
+    "bully": 1,
+    "victim": 1,
+    "bystander_b": 1
+   },
+   "event_summary": "欺凌者：这画得也太丑了吧,哈哈哈!；受害者：(低着头不说话)；旁观者发言 1 次",
+   "what_you_did": "",
+   "student_reactions": [
+    {
+     "role": "bully",
+     "label": "欺凌者",
+     "name": "徐凯",
+     "content": "这画得也太丑了吧,哈哈哈!"
+    },
+    {
+     "role": "victim",
+     "label": "受害者",
+     "name": "林小满",
+     "content": "(低着头不说话)"
+    },
+    {
+     "role": "bystander_b",
+     "label": "旁观者B",
+     "name": "刘洋",
+     "content": "(跟着笑)哈哈哈..."
+    }
+   ],
+   "dimension_scores": {},
+   "dimension_detail": [],
+   "weak_dimensions": [],
+   "risk_flags": [],
+   "improvement_actions": [],
+   "teacher_alignment": [],
+   "model_answer": "",
+   "coach_comment": "本轮未进行干预：可在欺凌行为发生时及时介入。",
+   "next_step": "下一轮遇到新的欺凌发言时，请给出「行为定性 + 明确停止要求」。"
+  },
+  {
+   "round": 2,
+   "has_intervention": false,
+   "score": null,
+   "band": null,
+   "raw_score": null,
+   "risk_level": null,
+   "risk_cap_applied": false,
+   "dialogue_counts": {
+    "bully": 1,
+    "victim": 1,
+    "bystander_a": 1
+   },
+   "event_summary": "欺凌者：切,有什么了不起的。；受害者：(低着头不说话)；旁观者发言 1 次",
+   "what_you_did": "",
+   "student_reactions": [
+    {
+     "role": "bully",
+     "label": "欺凌者",
+     "name": "徐凯",
+     "content": "切,有什么了不起的。"
+    },
+    {
+     "role": "victim",
+     "label": "受害者",
+     "name": "林小满",
+     "content": "(低着头不说话)"
+    },
+    {
+     "role": "bystander_a",
+     "label": "旁观者A",
+     "name": "苏晴",
+     "content": "我觉得挺有想象力的。"
+    }
+   ],
+   "dimension_scores": {},
+   "dimension_detail": [],
+   "weak_dimensions": [],
+   "risk_flags": [],
+   "improvement_actions": [],
+   "teacher_alignment": [],
+   "model_answer": "",
+   "coach_comment": "本轮未进行干预：可在欺凌行为发生时及时介入。",
+   "next_step": "下一轮遇到新的欺凌发言时，请给出「行为定性 + 明确停止要求」。"
+  },
+  {
+   "round": 3,
+   "has_intervention": false,
+   "score": null,
+   "band": null,
+   "raw_score": null,
+   "risk_level": null,
+   "risk_cap_applied": false,
+   "dialogue_counts": {
+    "bully": 1,
+    "victim": 1,
+    "bystander_b": 1
+   },
+   "event_summary": "欺凌者：切,有什么了不起的。；受害者：(小声)我...我没有...；旁观者发言 1 次",
+   "what_you_did": "",
+   "student_reactions": [
+    {
+     "role": "bully",
+     "label": "欺凌者",
+     "name": "徐凯",
+     "content": "切,有什么了不起的。"
+    },
+    {
+     "role": "victim",
+     "label": "受害者",
+     "name": "林小满",
+     "content": "(小声)我...我没有..."
+    },
+    {
+     "role": "bystander_b",
+     "label": "旁观者B",
+     "name": "刘洋",
+     "content": "(跟着笑)哈哈哈..."
+    }
+   ],
+   "dimension_scores": {},
+   "dimension_detail": [],
+   "weak_dimensions": [],
+   "risk_flags": [],
+   "improvement_actions": [],
+   "teacher_alignment": [],
+   "model_answer": "",
+   "coach_comment": "本轮未进行干预：可在欺凌行为发生时及时介入。",
+   "next_step": "下一轮遇到新的欺凌发言时，请给出「行为定性 + 明确停止要求」。"
+  },
+  {
+   "round": 4,
+   "has_intervention": false,
+   "score": null,
+   "band": null,
+   "raw_score": null,
+   "risk_level": null,
+   "risk_cap_applied": false,
+   "dialogue_counts": {
+    "bully": 1,
+    "victim": 1,
+    "bystander_a": 1
+   },
+   "event_summary": "欺凌者：切,有什么了不起的。；受害者：(低着头不说话)；旁观者发言 1 次",
+   "what_you_did": "",
+   "student_reactions": [
+    {
+     "role": "bully",
+     "label": "欺凌者",
+     "name": "徐凯",
+     "content": "切,有什么了不起的。"
+    },
+    {
+     "role": "victim",
+     "label": "受害者",
+     "name": "林小满",
+     "content": "(低着头不说话)"
+    },
+    {
+     "role": "bystander_a",
+     "label": "旁观者A",
+     "name": "苏晴",
+     "content": "我觉得挺有想象力的。"
+    }
+   ],
+   "dimension_scores": {},
+   "dimension_detail": [],
+   "weak_dimensions": [],
+   "risk_flags": [],
+   "improvement_actions": [],
+   "teacher_alignment": [],
+   "model_answer": "",
+   "coach_comment": "本轮未进行干预：可在欺凌行为发生时及时介入。",
+   "next_step": "下一轮遇到新的欺凌发言时，请给出「行为定性 + 明确停止要求」。"
+  },
+  {
+   "round": 5,
+   "has_intervention": false,
+   "score": null,
+   "band": null,
+   "raw_score": null,
+   "risk_level": null,
+   "risk_cap_applied": false,
+   "dialogue_counts": {
+    "bully": 1,
+    "victim": 1,
+    "bystander_b": 1
+   },
+   "event_summary": "欺凌者：切,有什么了不起的。；受害者：(低着头不说话)；旁观者发言 1 次",
+   "what_you_did": "",
+   "student_reactions": [
+    {
+     "role": "bully",
+     "label": "欺凌者",
+     "name": "徐凯",
+     "content": "切,有什么了不起的。"
+    },
+    {
+     "role": "victim",
+     "label": "受害者",
+     "name": "林小满",
+     "content": "(低着头不说话)"
+    },
+    {
+     "role": "bystander_b",
+     "label": "旁观者B",
+     "name": "刘洋",
+     "content": "好像是有点好笑..."
+    }
+   ],
+   "dimension_scores": {},
+   "dimension_detail": [],
+   "weak_dimensions": [],
+   "risk_flags": [],
+   "improvement_actions": [],
+   "teacher_alignment": [],
+   "model_answer": "",
+   "coach_comment": "本轮未进行干预：可在欺凌行为发生时及时介入。",
+   "next_step": "下一轮遇到新的欺凌发言时，请给出「行为定性 + 明确停止要求」。"
+  }
+ ],
+ "improvement_suggestions": {
+  "rounds_analyzed": 5,
+  "rounds_with_intervention": 0,
+  "summary": "共分析 5 轮，但没有产生可用的专家评分，无法给出维度级改进建议。",
+  "dimension_gaps": [],
+  "priorities": [],
+  "risk_reminders": [],
+  "templates": [
+   {
+    "target": "通用四要素模板",
+    "text": "「这是××欺凌，我明确不接受。请立刻停止××。这样会让××感到受伤，你需要在××前做出改变。我今天分别找你们谈一次，××我再确认情况。」",
+    "why": "同时覆盖行为定性、停止要求、责任与改变、跟进安排。"
+   }
+  ],
+  "action_plan": [
+   "保持当前的「定性 → 制止 → 责任 → 跟进」表达结构，并继续补充具体时间点的跟进安排。"
+  ],
+  "round_reviews": [
+   {
+    "round": 1,
+    "score": null,
+    "band": null,
+    "has_intervention": false,
+    "coach_comment": "本轮未进行干预：可在欺凌行为发生时及时介入。",
+    "weak": [],
+    "risks": []
+   },
+   {
+    "round": 2,
+    "score": null,
+    "band": null,
+    "has_intervention": false,
+    "coach_comment": "本轮未进行干预：可在欺凌行为发生时及时介入。",
+    "weak": [],
+    "risks": []
+   },
+   {
+    "round": 3,
+    "score": null,
+    "band": null,
+    "has_intervention": false,
+    "coach_comment": "本轮未进行干预：可在欺凌行为发生时及时介入。",
+    "weak": [],
+    "risks": []
+   },
+   {
+    "round": 4,
+    "score": null,
+    "band": null,
+    "has_intervention": false,
+    "coach_comment": "本轮未进行干预：可在欺凌行为发生时及时介入。",
+    "weak": [],
+    "risks": []
+   },
+   {
+    "round": 5,
+    "score": null,
+    "band": null,
+    "has_intervention": false,
+    "coach_comment": "本轮未进行干预：可在欺凌行为发生时及时介入。",
+    "weak": [],
+    "risks": []
+   }
+  ]
+ },
+ "training_report": {
+  "executive_summary": {
+   "rounds_total": 5,
+   "rounds_intervened": 0,
+   "rounds_passed": 0,
+   "avg_score": null,
+   "best_score": null,
+   "worst_score": null,
+   "level": "无可用数据",
+   "level_desc": "建议检查模型/API 配置后重新演练。",
+   "trend": {
+    "direction": "无数据",
+    "delta": 0.0,
+    "first": null,
+    "last": null
+   },
+   "gap_to_pass": null,
+   "key_problem": "",
+   "top_actions": [],
+   "score_formula": "总分 = 七维等权平均（N/O 维度不计入分母，也不按 0 分计）",
+   "rules_note": "",
+   "headline": "本次模拟没有产生可用的专家评分，无法给出量化结论。"
+  },
+  "capability_profile": {
+   "dimensions": [
+    {
+     "dim": "D1",
+     "name": "欺凌识别与制止",
+     "avg": null,
+     "best": null,
+     "worst": null,
+     "band": null,
+     "level": "无可观察证据",
+     "pass_rate": 0.0,
+     "rounds_scored": 0,
+     "trend": "无数据",
+     "trend_delta": 0.0,
+     "requirement": "量规要求明确指出具体行为不可接受并给出清晰、可执行的停止要求；「别闹了」「不要这样」等无对象劝阻属于初步不足。",
+     "gap": "未识别核心欺凌，或只有温和口头劝阻，缺少「行为定性 + 明确停止要求」",
+     "advice": "先用一句话给行为定性（这是言语欺凌/关系欺凌，我明确不接受），再给出对象明确的停止要求（请立刻停止对 XX 的嘲笑/起哄）。",
+     "avoid": "避免只说「别闹了」「不要这样」或只处理旁支小节。",
+     "sample": "「韩雪，你不要攻击同学——这是言语欺凌，我明确不接受。请立刻停止对温言的嘲笑。」"
+    },
+    {
+     "dim": "D2",
+     "name": "受害者保护与心理支持",
+     "avg": null,
+     "best": null,
+     "worst": null,
+     "band": null,
+     "level": "无可观察证据",
+     "pass_rate": 0.0,
+     "rounds_scored": 0,
+     "trend": "无数据",
+     "trend_delta": 0.0,
+     "requirement": "量规要求兼顾安全、情绪与实际需要；把「要不要原谅」交给受害者属于把责任转给受害者。",
+     "gap": "只表达共情，未做安全确认与具体保护；或把决定权交回受害者",
+     "advice": "先确认安全（你现在安全吗），再给具体保护安排（安排座位/陪同离场/单独谈话），最后才谈感受。",
+     "avoid": "避免用「你愿意原谅他吗」把停止条件的决定权交给受害者。",
+     "sample": "「小宇，你现在安全吗？我先安排你坐到老师旁边，下课我陪你到办公室，我们再慢慢说。」"
+    },
+    {
+     "dim": "D3",
+     "name": "欺凌者责任认识与行为改变",
+     "avg": null,
+     "best": null,
+     "worst": null,
+     "band": null,
+     "level": "无可观察证据",
+     "pass_rate": 0.0,
+     "rounds_scored": 0,
+     "trend": "无数据",
+     "trend_delta": 0.0,
+     "requirement": "量规要求使实施者承担责任并改变行为；「不是故意的」不能替代责任说明，仅要求道歉不等于责任已改变。",
+     "gap": "只有口头劝导或要求道歉，未说明行为影响，也未提出可执行的改变要求",
+     "advice": "说明行为对受害者的影响，再给具体改变要求（以后想开玩笑前先问对方 / 换位想一想）。",
+     "avoid": "避免用「不是故意的」「你也是好孩子」消解责任。",
+     "sample": "「你这样说会让小宇觉得自己被攻击、被孤立；以后想开玩笑之前先问一句对方愿不愿意。」"
+    },
+    {
+     "dim": "D4",
+     "name": "情境适配与风险控制",
+     "avg": null,
+     "best": null,
+     "worst": null,
+     "band": null,
+     "level": "无可观察证据",
+     "pass_rate": 0.0,
+     "rounds_scored": 0,
+     "trend": "无数据",
+     "trend_delta": 0.0,
+     "requirement": "量规要求策略与风险匹配；强迫对质、暴露受害者会造成报复风险，且不能被其他维度高分抵消。",
+     "gap": "淡化伤害性质、忽视权力差异，或在未评估安全时安排双方碰面/和解",
+     "advice": "不淡化行为定性；高风险或权力不对等时先分开谈话并安排保护，不安排双方当面对质。",
+     "avoid": "避免「你们都是同学，一起沟通一下」这类促成和解的安排。",
+     "sample": "「我先分别和你们谈，今天不安排你们碰面；我要确保温言这段时间是安全的。」"
+    },
+    {
+     "dim": "D5",
+     "name": "同伴与群体规范",
+     "avg": null,
+     "best": null,
+     "worst": null,
+     "band": null,
+     "level": "无可观察证据",
+     "pass_rate": 0.0,
+     "rounds_scored": 0,
+     "trend": "无数据",
+     "trend_delta": 0.0,
+     "requirement": "量规要求适当影响旁观者与群体氛围；旁观者沉默会被读作默许。",
+     "gap": "未涉及旁观者与群体规范，起哄未被处理",
+     "advice": "明确班级反欺凌规范与报告路径，并提醒起哄者也需承担相应责任。",
+     "avoid": "避免只对欺凌者说话、完全不涉及旁观者与群体规范。",
+     "sample": "「我们班的规矩是不允许起哄和嘲笑；看到有人被欺负要告诉老师，在场的每个人都有责任。」"
+    },
+    {
+     "dim": "D6",
+     "name": "长期欺凌干预与跟进",
+     "avg": null,
+     "best": null,
+     "worst": null,
+     "band": null,
+     "level": "无可观察证据",
+     "pass_rate": 0.0,
+     "rounds_scored": 0,
+     "trend": "无数据",
+     "trend_delta": 0.0,
+     "requirement": "量规要求行动、责任主体与跟进方式明确；「我会处理」属于初步不足，持续危险下会被判为低分。",
+     "gap": "没有任何调查、报告、保护、复查安排（仅口头承诺）",
+     "advice": "把跟进说成可执行安排：谁做、什么时候、做什么、什么时候复查。",
+     "avoid": "避免只说「我会处理」；每轮至少补一句带时间点的跟进。",
+     "sample": "「我今天放学前分别找你们谈一次，周三我再过来确认情况，后续需要时会报告德育处。」"
+    },
+    {
+     "dim": "D7",
+     "name": "多轮回应与调整",
+     "avg": null,
+     "best": null,
+     "worst": null,
+     "band": null,
+     "level": "无可观察证据",
+     "pass_rate": 0.0,
+     "rounds_scored": 0,
+     "trend": "无数据",
+     "trend_delta": 0.0,
+     "requirement": "量规要求根据新信息调整策略；连续几轮使用同一逻辑会被判为机械重复。",
+     "gap": "重复同一套话术，未依据学生新反应调整",
+     "advice": "引用学生刚才的反应再调整策略：回应他说的内容，并说明为什么现在这样做。",
+     "avoid": "避免多轮使用完全相同的安抚句式而不回应新信息。",
+     "sample": "「你说你不是故意的，但温言刚才已经哭了，所以我们先分开谈，这周我每天都会关注。」"
+    }
+   ],
+   "strongest": null,
+   "weakest": null,
+   "no_observable_dims": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "D6",
+    "D7"
+   ],
+   "summary": "本次没有可用的维度分，无法给出能力画像。",
+   "threshold": 60
+  },
+  "failure_attribution": {
+   "categories": [
+    {
+     "category": "节奏与时机",
+     "desc": "介入时机或跨轮次调整存在问题——该介入未介入、话术跨轮重复未回应新反应。",
+     "count": 5,
+     "rounds": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "impact": 0.0,
+     "share": 0.0,
+     "items": [
+      {
+       "round": 1,
+       "dim": null,
+       "name": "该轮未介入",
+       "detail": "欺凌者：这画得也太丑了吧,哈哈哈!；受害者：(低着头不说话)；旁观者发言 1 次",
+       "gap": "欺凌行为发生时未及时介入，轮次机会被浪费。",
+       "evidence": "",
+       "fix": "在出现针对个人的嘲笑、起哄、孤立动作时立即介入，先制止再处理感受。",
+       "avoid": "避免等到冲突升级或受害者已崩溃才介入。",
+       "impact": 0.0
+      },
+      {
+       "round": 2,
+       "dim": null,
+       "name": "该轮未介入",
+       "detail": "欺凌者：切,有什么了不起的。；受害者：(低着头不说话)；旁观者发言 1 次",
+       "gap": "欺凌行为发生时未及时介入，轮次机会被浪费。",
+       "evidence": "",
+       "fix": "在出现针对个人的嘲笑、起哄、孤立动作时立即介入，先制止再处理感受。",
+       "avoid": "避免等到冲突升级或受害者已崩溃才介入。",
+       "impact": 0.0
+      },
+      {
+       "round": 3,
+       "dim": null,
+       "name": "该轮未介入",
+       "detail": "欺凌者：切,有什么了不起的。；受害者：(小声)我...我没有...；旁观者发言 1 次",
+       "gap": "欺凌行为发生时未及时介入，轮次机会被浪费。",
+       "evidence": "",
+       "fix": "在出现针对个人的嘲笑、起哄、孤立动作时立即介入，先制止再处理感受。",
+       "avoid": "避免等到冲突升级或受害者已崩溃才介入。",
+       "impact": 0.0
+      },
+      {
+       "round": 4,
+       "dim": null,
+       "name": "该轮未介入",
+       "detail": "欺凌者：切,有什么了不起的。；受害者：(低着头不说话)；旁观者发言 1 次",
+       "gap": "欺凌行为发生时未及时介入，轮次机会被浪费。",
+       "evidence": "",
+       "fix": "在出现针对个人的嘲笑、起哄、孤立动作时立即介入，先制止再处理感受。",
+       "avoid": "避免等到冲突升级或受害者已崩溃才介入。",
+       "impact": 0.0
+      },
+      {
+       "round": 5,
+       "dim": null,
+       "name": "该轮未介入",
+       "detail": "欺凌者：切,有什么了不起的。；受害者：(低着头不说话)；旁观者发言 1 次",
+       "gap": "欺凌行为发生时未及时介入，轮次机会被浪费。",
+       "evidence": "",
+       "fix": "在出现针对个人的嘲笑、起哄、孤立动作时立即介入，先制止再处理感受。",
+       "avoid": "避免等到冲突升级或受害者已崩溃才介入。",
+       "impact": 0.0
+      }
+     ]
+    }
+   ],
+   "summary": "失分主要来自「节奏与时机」（5 项，占总缺口 0.0%）：介入时机或跨轮次调整存在问题——该介入未介入、话术跨轮重复未回应新反应。",
+   "total_impact": 0.0,
+   "principle": "归因只依据专家评分明细与原始对话，不做关键词猜测；「风险操作」类条目表示表达触发了风险条款，本身不等于额外扣分（封顶仅在原始均分高于 60 时生效）。"
+  },
+  "pitfalls": {
+   "items": [],
+   "summary": "本次未发现需要对照的典型表述。",
+   "count": 0
+  },
+  "training_roadmap": {
+   "stages": [
+    {
+     "stage": 1,
+     "title": "第一阶段：定性 + 制止（先让行为停下来）",
+     "target_dims": [
+      "D1",
+      "D3"
+     ],
+     "target_names": [
+      "欺凌识别与制止",
+      "欺凌者责任认识与行为改变"
+     ],
+     "goal": "能在 10 秒内说清「这是什么行为 + 立刻停止 + 谁要改变」，避免只做口头劝导。",
+     "why_now": "当前这些维度平均分为 无数据，其中 2 项低于 60 分，是当前优先补强对象。",
+     "drills": [
+      "对着镜或在空教室练习：一句话定性 + 一句话停止要求（2 句，20 秒内说完）。",
+      "复述本班 3 个真实场景，分别写出「行为定性句 + 停止要求句」。",
+      "练习时故意省略责任句与跟进句，感受自己解释时的语速变化。"
+     ],
+     "checkpoint": "连续 3 次模拟中 D1 与 D3 均达到 60 分以上，且不再出现「只说了别闹了」式表达。",
+     "script": "「韩雪，你不要攻击同学——这是言语欺凌，我明确不接受。请立刻停止对温言的嘲笑。」 「你这样说会让小宇觉得自己被攻击、被孤立；以后想开玩笑之前先问一句对方愿不愿意。」",
+     "script_note": "可先照此结构练习，再替换成现场情境的具体内容。",
+     "target_score": 60
+    },
+    {
+     "stage": 2,
+     "title": "第二阶段：保护 + 风险控制（不让事情变糟）",
+     "target_dims": [
+      "D2",
+      "D4"
+     ],
+     "target_names": [
+      "受害者保护与心理支持",
+      "情境适配与风险控制"
+     ],
+     "goal": "在处理行为之前先确认受害者是否安全，并能识别哪些安排会提高报复风险。",
+     "why_now": "当前这些维度平均分为 无数据，其中 2 项低于 60 分，是当前优先补强对象。",
+     "drills": [
+      "练习「先问安全、再给安排」的开场句，并准备 3 种具体保护措施（调位、陪同、单独谈话）。",
+      "判断题训练：给出 6 种常见安排（当面对质、道歉、集体讨论、报告德育处等），练习判断风险。",
+      "演练「不安排碰面」的替代说法，避免因追求和解而暴露受害者。"
+     ],
+     "checkpoint": "D2 与 D4 均达到 60 分以上，且不再触发「淡化伤害 / 强迫对质 / 暴露受害者」类风险。",
+     "script": "「小宇，你现在安全吗？我先安排你坐到老师旁边，下课我陪你到办公室，我们再慢慢说。」 「我先分别和你们谈，今天不安排你们碰面；我要确保温言这段时间是安全的。」",
+     "script_note": "可先照此结构练习，再替换成现场情境的具体内容。",
+     "target_score": 60
+    },
+    {
+     "stage": 3,
+     "title": "第三阶段：跟进 + 群体规范（让改变持续）",
+     "target_dims": [
+      "D6",
+      "D5",
+      "D7"
+     ],
+     "target_names": [
+      "长期欺凌干预与跟进",
+      "同伴与群体规范",
+      "多轮回应与调整"
+     ],
+     "goal": "把跟进说成可核查的安排，并让旁观者与班级规范进入干预内容。",
+     "why_now": "当前这些维度平均分为 无数据，其中 3 项低于 60 分，是当前优先补强对象。",
+     "drills": [
+      "每次干预固定补一句跟进：谁、何时、做什么、何时复查（写在纸上再开口）。",
+      "练习 3 句群体规范句（班级规矩、报告路径、旁观者责任），插入到现有话术中。",
+      "跨轮次练习：回应学生上一轮的新反应，而不是重复上一轮说法。"
+     ],
+     "checkpoint": "D6 稳定达到 60 分以上，D5 有明确表述，D7 出现「依据新反应调整」的表述。",
+     "script": "「我今天放学前分别找你们谈一次，周三我再过来确认情况，后续需要时会报告德育处。」 「我们班的规矩是不允许起哄和嘲笑；看到有人被欺负要告诉老师，在场的每个人都有责任。」 「你说你不是故意的，但温言刚才已经哭了，所以我们先分开谈，这周我每天都会关注。」",
+     "script_note": "可先照此结构练习，再替换成现场情境的具体内容。",
+     "target_score": 60
+    }
+   ],
+   "summary": "三阶段按「先止损 → 再保护 → 后巩固」推进；每阶段都有可当场练习的动作与可检验的达标标准。",
+   "method": "每阶段达标后再进入下一阶段；未达标时不要追求表达长度，先保证要素齐全。"
+  },
+  "scripts": {
+   "scripts": [
+    {
+     "scene": "通用四要素（任何场景的底稿）",
+     "script": "「××，你刚才的做法属于××欺凌，我明确不接受这种行为。请立刻停止××。这样会让××感到被排斥和伤害，你需要在××之前做出改变。我今天放学前分别找你们谈一次，××我再过来确认情况。」",
+     "covers": [
+      "D1",
+      "D3",
+      "D6"
+     ],
+     "when_to_use": "时间紧、拿不准时先用这套，任何场景都不会低于基本要求。"
+    },
+    {
+     "scene": "言语嘲笑 / 取笑（现场制止）",
+     "script": "「韩雪，你不要攻击同学——这是言语欺凌，我明确不接受。请立刻停止对温言的嘲笑。」 「你这样说会让小宇觉得自己被攻击、被孤立；以后想开玩笑之前先问一句对方愿不愿意。」",
+     "covers": [
+      "D1",
+      "D3"
+     ],
+     "when_to_use": "出现「你们看××真蠢」「××就是废物」一类起哄，当场点名具体行为并停止。"
+    },
+    {
+     "scene": "关系孤立 / 排挤",
+     "script": "「××，我看到你们没有叫××一起玩，还说了那句话。排除同伴同样是欺凌的一部分，我明确不接受。今天你们要做的第一件事是邀请××一起加入；我今天会分别找你们谈，周三我再确认××的情况。」",
+     "covers": [
+      "D1",
+      "D3",
+      "D6"
+     ],
+     "when_to_use": "孤立没有明显肢体冲突时，必须点明「排除同伴」本身也属于欺凌行为。"
+    },
+    {
+     "scene": "群体起哄与旁观者",
+     "script": "「我们班的规矩是不允许起哄和嘲笑；看到有人被欺负要告诉老师，在场的每个人都有责任。」 起哄的同学也要承担相应责任：下次再听到这种嘲笑，请直接告诉老师，而不是跟着笑。",
+     "covers": [
+      "D5",
+      "D1"
+     ],
+     "when_to_use": "全班围观、笑声起哄时，必须处理旁观者，否则下次照旧。"
+    },
+    {
+     "scene": "存在报复或安全风险（先分开处理）",
+     "script": "「我先分别和你们谈，今天不安排你们碰面；我要确保温言这段时间是安全的。」 「小宇，你现在安全吗？我先安排你坐到老师旁边，下课我陪你到办公室，我们再慢慢说。」",
+     "covers": [
+      "D4",
+      "D2"
+     ],
+     "when_to_use": "权力明显不对等、受害者已受伤或疑似会被报复时——不安排碰面、先做保护。"
+    },
+    {
+     "scene": "事后跟进与复查",
+     "script": "「我今天放学前分别找你们谈一次，周三我再过来确认情况，后续需要时会报告德育处。」 我也会找你确认：你今天有没有再被嘲笑？如果有，下次可以直接来办公室找我。",
+     "covers": [
+      "D6",
+      "D2",
+      "D7"
+     ],
+     "when_to_use": "每轮干预结束后补一句，形成闭环；同时兼顾受害者的后续感受。"
+    }
+   ],
+   "summary": "以下话术为结构模板，请把「××」替换为现场的真实对象与行为；照结构说即可达标，不必逐字背诵。",
+   "note": "报告阶段提供完整示范；模拟进行中系统只给策略方向，不提供可直接照抄的句子。"
+  },
+  "self_check": {
+   "items": [
+    {
+     "id": 1,
+     "dim": "D1",
+     "text": "我点明了这是哪一类欺凌，并明确说「我不接受这种行为」",
+     "name": "欺凌识别与制止"
+    },
+    {
+     "id": 2,
+     "dim": "D1",
+     "text": "我指名（或明确指向）了具体对象，并给出可执行的停止要求",
+     "name": "欺凌识别与制止"
+    },
+    {
+     "id": 3,
+     "dim": "D2",
+     "text": "我先确认了受害者现在是否安全",
+     "name": "受害者保护与心理支持"
+    },
+    {
+     "id": 4,
+     "dim": "D2",
+     "text": "我给出了具体保护安排（调座位 / 陪同离场 / 单独谈话），而不是只说安慰话",
+     "name": "受害者保护与心理支持"
+    },
+    {
+     "id": 5,
+     "dim": "D3",
+     "text": "我说明了该行为对受害者的影响",
+     "name": "欺凌者责任认识与行为改变"
+    },
+    {
+     "id": 6,
+     "dim": "D3",
+     "text": "我提出了可核查的行为改变要求，而不只是要求道歉",
+     "name": "欺凌者责任认识与行为改变"
+    },
+    {
+     "id": 7,
+     "dim": "D4",
+     "text": "我没有淡化动机或伤害（「不是故意的」「闹着玩」「没关系」）",
+     "name": "情境适配与风险控制"
+    },
+    {
+     "id": 8,
+     "dim": "D4",
+     "text": "我没有安排双方当面对质、互相道歉或当众复述经过",
+     "name": "情境适配与风险控制"
+    },
+    {
+     "id": 9,
+     "dim": "D4",
+     "text": "我没有公开受害者的身份与细节",
+     "name": "情境适配与风险控制"
+    },
+    {
+     "id": 10,
+     "dim": "D5",
+     "text": "我提到了旁观者与班级规范 / 报告路径",
+     "name": "同伴与群体规范"
+    },
+    {
+     "id": 11,
+     "dim": "D6",
+     "text": "我说清了跟进安排：谁、何时、做什么、什么时候复查",
+     "name": "长期欺凌干预与跟进"
+    },
+    {
+     "id": 12,
+     "dim": "D7",
+     "text": "我回应了学生这一轮的新反应，而不是重复上一轮的说法",
+     "name": "多轮回应与调整"
+    }
+   ],
+   "summary": "发送前逐条对照：每勾选一项，对应维度的得分就有保障；前 4 项是最容易拿到的分。",
+   "hint": "建议每次干预只盯 3 项：先保证「定性 + 停止要求 + 跟进句」三件套稳定出现。"
+  },
+  "rubric_explainer": {
+   "bands": [
+    {
+     "range": "80–100",
+     "label": "清晰、具体、适切",
+     "desc": "行为定性明确、停止要求可执行、责任与改变具体、保护与跟进安排齐全且与风险匹配。"
+    },
+    {
+     "range": "60–79",
+     "label": "基本达标",
+     "desc": "覆盖主要要素，个别环节（如跟进时间点、群体规范）仍显笼统。"
+    },
+    {
+     "range": "40–59",
+     "label": "初步不足",
+     "desc": "有干预意识但要素不全：只安慰未制止、只制止未保护、无任何跟进安排等。"
+    },
+    {
+     "range": "0–39",
+     "label": "明显不当",
+     "desc": "未构成有效干预：与情境无关、敷衍应付、淡化伤害、把责任交给受害者等。"
+    }
+   ],
+   "dimensions": [
+    {
+     "dim": "D1",
+     "name": "欺凌识别与制止",
+     "criteria": "量规要求明确指出具体行为不可接受并给出清晰、可执行的停止要求；「别闹了」「不要这样」等无对象劝阻属于初步不足。",
+     "gap": "未识别核心欺凌，或只有温和口头劝阻，缺少「行为定性 + 明确停止要求」",
+     "fix": "先用一句话给行为定性（这是言语欺凌/关系欺凌，我明确不接受），再给出对象明确的停止要求（请立刻停止对 XX 的嘲笑/起哄）。"
+    },
+    {
+     "dim": "D2",
+     "name": "受害者保护与心理支持",
+     "criteria": "量规要求兼顾安全、情绪与实际需要；把「要不要原谅」交给受害者属于把责任转给受害者。",
+     "gap": "只表达共情，未做安全确认与具体保护；或把决定权交回受害者",
+     "fix": "先确认安全（你现在安全吗），再给具体保护安排（安排座位/陪同离场/单独谈话），最后才谈感受。"
+    },
+    {
+     "dim": "D3",
+     "name": "欺凌者责任认识与行为改变",
+     "criteria": "量规要求使实施者承担责任并改变行为；「不是故意的」不能替代责任说明，仅要求道歉不等于责任已改变。",
+     "gap": "只有口头劝导或要求道歉，未说明行为影响，也未提出可执行的改变要求",
+     "fix": "说明行为对受害者的影响，再给具体改变要求（以后想开玩笑前先问对方 / 换位想一想）。"
+    },
+    {
+     "dim": "D4",
+     "name": "情境适配与风险控制",
+     "criteria": "量规要求策略与风险匹配；强迫对质、暴露受害者会造成报复风险，且不能被其他维度高分抵消。",
+     "gap": "淡化伤害性质、忽视权力差异，或在未评估安全时安排双方碰面/和解",
+     "fix": "不淡化行为定性；高风险或权力不对等时先分开谈话并安排保护，不安排双方当面对质。"
+    },
+    {
+     "dim": "D5",
+     "name": "同伴与群体规范",
+     "criteria": "量规要求适当影响旁观者与群体氛围；旁观者沉默会被读作默许。",
+     "gap": "未涉及旁观者与群体规范，起哄未被处理",
+     "fix": "明确班级反欺凌规范与报告路径，并提醒起哄者也需承担相应责任。"
+    },
+    {
+     "dim": "D6",
+     "name": "长期欺凌干预与跟进",
+     "criteria": "量规要求行动、责任主体与跟进方式明确；「我会处理」属于初步不足，持续危险下会被判为低分。",
+     "gap": "没有任何调查、报告、保护、复查安排（仅口头承诺）",
+     "fix": "把跟进说成可执行安排：谁做、什么时候、做什么、什么时候复查。"
+    },
+    {
+     "dim": "D7",
+     "name": "多轮回应与调整",
+     "criteria": "量规要求根据新信息调整策略；连续几轮使用同一逻辑会被判为机械重复。",
+     "gap": "重复同一套话术，未依据学生新反应调整",
+     "fix": "引用学生刚才的反应再调整策略：回应他说的内容，并说明为什么现在这样做。"
+    }
+   ],
+   "no_rule": "D5/D6/D7 在确无可观察证据时判 N/O（无可观察），不计入平均分母——既不会拉低总分，也不会被当成 0 分。",
+   "risk_codes": [
+    {
+     "code": "R_VICTIM_BLAME",
+     "label": "责备或羞辱受害者",
+     "trigger": "不要把责任、原谅或停止条件的决定权交给受害者；由教师承担裁定，并明确记录与跟进其感受。",
+     "avoid": "避免「你愿意原谅他吗」「都是你太敏感了」这类表述。",
+     "penalty": "风险本身不直接扣分，但会拉低相关维度；≥2 项风险（或公开羞辱/强迫对质这类高风险）判为严重风险，总分封顶 60。"
+    },
+    {
+     "code": "R_MINIMIZE_HARM",
+     "label": "淡化或否认欺凌伤害",
+     "trigger": "只评价行为，不评价动机；把伤害说成「闹着玩」「不是故意的」「没关系」会被判定为淡化伤害。",
+     "avoid": "避免「不小心」「没关系」「都是开玩笑」。",
+     "penalty": "风险本身不直接扣分，但会拉低相关维度；≥2 项风险（或公开羞辱/强迫对质这类高风险）判为严重风险，总分封顶 60。"
+    },
+    {
+     "code": "R_FORCED_CONFRONTATION",
+     "label": "强迫受害者对质或和解",
+     "trigger": "未评估安全与受害者意愿前，不安排双方碰面、不促成和解、不要求当众复述。",
+     "avoid": "避免「你们俩谈谈」「达成个约定」「互相原谅一下」。",
+     "penalty": "风险本身不直接扣分，但会拉低相关维度；≥2 项风险（或公开羞辱/强迫对质这类高风险）判为严重风险，总分封顶 60。"
+    },
+    {
+     "code": "R_EXPOSURE_RETALIATION",
+     "label": "暴露受害者并增加报复风险",
+     "trigger": "不公开受害者身份或细节，不要求当众复述经过；保护措施到位前避免公开讨论。",
+     "avoid": "避免在全班面前点名受害者或让其讲述细节。",
+     "penalty": "风险本身不直接扣分，但会拉低相关维度；≥2 项风险（或公开羞辱/强迫对质这类高风险）判为严重风险，总分封顶 60。"
+    },
+    {
+     "code": "R_PROMISE_NO_ACTION",
+     "label": "有持续危险却仅口头承诺",
+     "trigger": "「我会处理」不构成跟进；已知危险仍在继续时，必须给出行动、责任人与时间，否则持续性不会下降。",
+     "avoid": "避免只说「我会处理」「以后不会了」而没有具体安排。",
+     "penalty": "风险本身不直接扣分，但会拉低相关维度；≥2 项风险（或公开羞辱/强迫对质这类高风险）判为严重风险，总分封顶 60。"
+    }
+   ],
+   "cap_rule": "严重风险时总分封顶 60；只有原始均分高于 60 时封顶才真正生效。",
+   "principles": [
+    "评分依据实际证据，不按关键词数量或句子长度给分。",
+    "处罚、道歉、讲规则、同理心、和解都不自带高分；分数取决于这些做法在本情境中是否适当、具体、可执行。",
+    "维度之间等权平均，因此单点改进很难单独拉过线，需要成组补齐。"
+   ],
+   "threshold": 60
+  }
+ },
+ "report_data": {
+  "report_schema_version": "1.0",
+  "report_id": "report_969c751cb5b3",
+  "session_id": "6882d1a1",
+  "generated_at": "2026-11-09T17:23:10.597309",
+  "rubric_version": "评分表(1).docx-v1",
+  "scoring_prompt_version": "intervention-expert-v2",
+  "model_id": "",
+  "scoring_status": "not_evaluable",
+  "session": {
+   "session_id": "6882d1a1",
+   "total_rounds": 5,
+   "total_messages": 17,
+   "intervention_count": 0,
+   "skip_count": 4,
+   "duration_seconds": 1301
+  },
+  "summary": {
+   "raw_mean_score_100": null,
+   "final_quality_score_100": null,
+   "risk_level": "none",
+   "risk_cap_applied": false,
+   "rated_count": 0,
+   "no_opportunity_count": 0,
+   "insufficient_evidence_count": 0,
+   "not_assessed_count": 7
+  },
+  "dimensions": [
+   {
+    "code": "D1",
+    "name": "欺凌识别与制止",
+    "status": "not_assessed",
+    "score_100": null,
+    "band": null,
+    "evidence_refs": [],
+    "rationale": "",
+    "missing_behaviors": [],
+    "next_target": "",
+    "sample_utterance": "",
+    "retest_criteria": ""
+   },
+   {
+    "code": "D2",
+    "name": "受害者保护与心理支持",
+    "status": "not_assessed",
+    "score_100": null,
+    "band": null,
+    "evidence_refs": [],
+    "rationale": "",
+    "missing_behaviors": [],
+    "next_target": "",
+    "sample_utterance": "",
+    "retest_criteria": ""
+   },
+   {
+    "code": "D3",
+    "name": "欺凌者责任认识与行为改变",
+    "status": "not_assessed",
+    "score_100": null,
+    "band": null,
+    "evidence_refs": [],
+    "rationale": "",
+    "missing_behaviors": [],
+    "next_target": "",
+    "sample_utterance": "",
+    "retest_criteria": ""
+   },
+   {
+    "code": "D4",
+    "name": "情境适配与风险控制",
+    "status": "not_assessed",
+    "score_100": null,
+    "band": null,
+    "evidence_refs": [],
+    "rationale": "",
+    "missing_behaviors": [],
+    "next_target": "",
+    "sample_utterance": "",
+    "retest_criteria": ""
+   },
+   {
+    "code": "D5",
+    "name": "同伴与群体规范",
+    "status": "not_assessed",
+    "score_100": null,
+    "band": null,
+    "evidence_refs": [],
+    "rationale": "",
+    "missing_behaviors": [],
+    "next_target": "",
+    "sample_utterance": "",
+    "retest_criteria": ""
+   },
+   {
+    "code": "D6",
+    "name": "长期欺凌干预与跟进",
+    "status": "not_assessed",
+    "score_100": null,
+    "band": null,
+    "evidence_refs": [],
+    "rationale": "",
+    "missing_behaviors": [],
+    "next_target": "",
+    "sample_utterance": "",
+    "retest_criteria": ""
+   },
+   {
+    "code": "D7",
+    "name": "多轮回应与调整",
+    "status": "not_assessed",
+    "score_100": null,
+    "band": null,
+    "evidence_refs": [],
+    "rationale": "",
+    "missing_behaviors": [],
+    "next_target": "",
+    "sample_utterance": "",
+    "retest_criteria": ""
+   }
+  ],
+  "risks": [],
+  "metrics": {
+   "bullying_intensity": {
+    "baseline": 0.15,
+    "final": 0.15,
+    "delta_percentage_points": 0.0,
+    "valid_sample_count": 5,
+    "source_window": "首个有效快照至最终有效快照",
+    "text": "欺凌强度基本持平：15% → 15%（变化 +0.0 个百分点，未超过 2 个百分点的稳定阈值）"
+   },
+   "victim_distress": {
+    "baseline": 0.09,
+    "final": 0.0,
+    "delta_percentage_points": -9.0,
+    "valid_sample_count": 5,
+    "source_window": "首个有效快照至最终有效快照",
+    "text": "受害者压力下降 9.0 个百分点：9% → 0%"
+   },
+   "note": "以上为模拟状态变化（0–1 状态比例，变化以百分点表述），反映模拟演变结果，不等于教师能力评分，亦不构成因果结论。"
+  },
+  "bullying_type_profile": {
+   "method": "项目自定义六类关键词/强度分类（借用 OBVQ 名称与 0–4 级频率口径，但未按 OBVQ-R 标准量表的条目、施测对象与计分流程实施，非标准量表总分）",
+   "version": "project-classification-v1",
+   "categories": [
+    {
+     "name": "身体欺负",
+     "total": 0,
+     "level": "低",
+     "description": "未出现身体欺负行为"
+    },
+    {
+     "name": "言语欺负",
+     "total": 36,
+     "level": "高",
+     "description": "言语攻击频繁且激烈，造成严重伤害"
+    },
+    {
+     "name": "关系欺负",
+     "total": 0,
+     "level": "低",
+     "description": "同学关系和谐"
+    },
+    {
+     "name": "网络欺负",
+     "total": 0,
+     "level": "低",
+     "description": "未涉及网络欺负"
+    },
+    {
+     "name": "权力欺负",
+     "total": 0,
+     "level": "低",
+     "description": "权力关系平等"
+    },
+    {
+     "name": "偏见欺负",
+     "total": 0,
+     "level": "低",
+     "description": "未出现偏见性言论"
+    }
+   ],
+   "total_score": 36,
+   "total_formula": "每次识别到的欺凌事件按敌意强度映射为 0–4 分，累加到所有命中的类别；总分 = min(80, 六类累计分之和)。同一事件可重复计入多个类别，因此六类分项之和可能大于总分上限。",
+   "interpretive_limitations": "该统计用于刻画模拟中出现的欺凌行为类型，不用于教师 D1–D7 能力评分，也不可与 OBVQ-R 标准分比较。"
+  },
+  "strengths": [],
+  "priority_growth_areas": [],
+  "training_plan": [],
+  "reflection_questions": [
+   "本轮你最先注意到的是谁（欺凌者 / 受害者 / 旁观者）？换一个人先回应会有什么不同？",
+   "你的「停止要求」是否具体到可执行（对象 + 行为 + 立即停止）？",
+   "跟进安排是否包含「谁、何时、做什么、何时复查」四要素？"
+  ],
+  "interaction_timeline": [
+   {
+    "turn_id": "turn_0001",
+    "round": 0,
+    "speaker_role": "system",
+    "event_type": "student_speech",
+    "text_excerpt": "[场景] 美术课上的嘲笑：【背景】美术课上，老师让同学依次展示自己的画作，被霸凌者认真画了一幅画，轮到展示。\n【霸凌者】你觉得她的画很丑，想当众取笑她，并带动其",
+    "teacher_action": "",
+    "student_response": "[场景] 美术课上的嘲笑：【背景】美术课上，老师让同学依次展示自己的画作，被霸凌者认真画了一幅画，轮到展示。\n【霸凌者】",
+    "expert_interpretation": ""
+   },
+   {
+    "turn_id": "turn_0002",
+    "round": 1,
+    "speaker_role": "bully",
+    "event_type": "student_speech",
+    "text_excerpt": "这画得也太丑了吧,哈哈哈!",
+    "teacher_action": "",
+    "student_response": "这画得也太丑了吧,哈哈哈!",
+    "expert_interpretation": "本轮未进行干预：可在欺凌行为发生时及时介入。"
+   },
+   {
+    "turn_id": "turn_0003",
+    "round": 1,
+    "speaker_role": "bystander_b",
+    "event_type": "student_speech",
+    "text_excerpt": "(跟着笑)哈哈哈...",
+    "teacher_action": "",
+    "student_response": "这画得也太丑了吧,哈哈哈!",
+    "expert_interpretation": "本轮未进行干预：可在欺凌行为发生时及时介入。"
+   },
+   {
+    "turn_id": "turn_0004",
+    "round": 1,
+    "speaker_role": "victim",
+    "event_type": "student_speech",
+    "text_excerpt": "(低着头不说话)",
+    "teacher_action": "",
+    "student_response": "这画得也太丑了吧,哈哈哈!",
+    "expert_interpretation": "本轮未进行干预：可在欺凌行为发生时及时介入。"
+   },
+   {
+    "turn_id": "turn_0005",
+    "round": 2,
+    "speaker_role": "bystander_a",
+    "event_type": "student_speech",
+    "text_excerpt": "我觉得挺有想象力的。",
+    "teacher_action": "",
+    "student_response": "我觉得挺有想象力的。",
+    "expert_interpretation": "本轮未进行干预：可在欺凌行为发生时及时介入。"
+   },
+   {
+    "turn_id": "turn_0006",
+    "round": 2,
+    "speaker_role": "bully",
+    "event_type": "student_speech",
+    "text_excerpt": "切,有什么了不起的。",
+    "teacher_action": "",
+    "student_response": "我觉得挺有想象力的。",
+    "expert_interpretation": "本轮未进行干预：可在欺凌行为发生时及时介入。"
+   },
+   {
+    "turn_id": "turn_0007",
+    "round": 2,
+    "speaker_role": "victim",
+    "event_type": "student_speech",
+    "text_excerpt": "(低着头不说话)",
+    "teacher_action": "",
+    "student_response": "我觉得挺有想象力的。",
+    "expert_interpretation": "本轮未进行干预：可在欺凌行为发生时及时介入。"
+   },
+   {
+    "turn_id": "turn_0008",
+    "round": 3,
+    "speaker_role": "bystander_b",
+    "event_type": "student_speech",
+    "text_excerpt": "(跟着笑)哈哈哈...",
+    "teacher_action": "",
+    "student_response": "(跟着笑)哈哈哈...",
+    "expert_interpretation": "本轮未进行干预：可在欺凌行为发生时及时介入。"
+   },
+   {
+    "turn_id": "turn_0009",
+    "round": 3,
+    "speaker_role": "bully",
+    "event_type": "student_speech",
+    "text_excerpt": "切,有什么了不起的。",
+    "teacher_action": "",
+    "student_response": "(跟着笑)哈哈哈...",
+    "expert_interpretation": "本轮未进行干预：可在欺凌行为发生时及时介入。"
+   },
+   {
+    "turn_id": "turn_0010",
+    "round": 3,
+    "speaker_role": "victim",
+    "event_type": "student_speech",
+    "text_excerpt": "(小声)我...我没有...",
+    "teacher_action": "",
+    "student_response": "(跟着笑)哈哈哈...",
+    "expert_interpretation": "本轮未进行干预：可在欺凌行为发生时及时介入。"
+   },
+   {
+    "turn_id": "turn_0011",
+    "round": 4,
+    "speaker_role": "bystander_a",
+    "event_type": "student_speech",
+    "text_excerpt": "我觉得挺有想象力的。",
+    "teacher_action": "",
+    "student_response": "我觉得挺有想象力的。",
+    "expert_interpretation": "本轮未进行干预：可在欺凌行为发生时及时介入。"
+   },
+   {
+    "turn_id": "turn_0012",
+    "round": 4,
+    "speaker_role": "bully",
+    "event_type": "student_speech",
+    "text_excerpt": "切,有什么了不起的。",
+    "teacher_action": "",
+    "student_response": "我觉得挺有想象力的。",
+    "expert_interpretation": "本轮未进行干预：可在欺凌行为发生时及时介入。"
+   },
+   {
+    "turn_id": "turn_0013",
+    "round": 4,
+    "speaker_role": "victim",
+    "event_type": "student_speech",
+    "text_excerpt": "(低着头不说话)",
+    "teacher_action": "",
+    "student_response": "我觉得挺有想象力的。",
+    "expert_interpretation": "本轮未进行干预：可在欺凌行为发生时及时介入。"
+   },
+   {
+    "turn_id": "turn_0014",
+    "round": 5,
+    "speaker_role": "bystander_b",
+    "event_type": "student_speech",
+    "text_excerpt": "好像是有点好笑...",
+    "teacher_action": "",
+    "student_response": "好像是有点好笑...",
+    "expert_interpretation": "本轮未进行干预：可在欺凌行为发生时及时介入。"
+   },
+   {
+    "turn_id": "turn_0015",
+    "round": 5,
+    "speaker_role": "bully",
+    "event_type": "student_speech",
+    "text_excerpt": "切,有什么了不起的。",
+    "teacher_action": "",
+    "student_response": "好像是有点好笑...",
+    "expert_interpretation": "本轮未进行干预：可在欺凌行为发生时及时介入。"
+   },
+   {
+    "turn_id": "turn_0016",
+    "round": 5,
+    "speaker_role": "victim",
+    "event_type": "student_speech",
+    "text_excerpt": "(低着头不说话)",
+    "teacher_action": "",
+    "student_response": "好像是有点好笑...",
+    "expert_interpretation": "本轮未进行干预：可在欺凌行为发生时及时介入。"
+   },
+   {
+    "turn_id": "turn_0017",
+    "round": null,
+    "speaker_role": "system",
+    "event_type": "student_speech",
+    "text_excerpt": "[Scenario] 美术课上的嘲笑: 【背景】美术课上，老师让同学依次展示自己的画作，被霸凌者认真画了一幅画，轮到展示。\n【霸凌者】你觉得她的画很丑，想当众取",
+    "teacher_action": "",
+    "student_response": "[Scenario] 美术课上的嘲笑: 【背景】美术课上，老师让同学依次展示自己的画作，被霸凌者认真画了一幅画，轮到展示",
+    "expert_interpretation": ""
+   }
+  ],
+  "data_notes": {
+   "limitations": [
+    "量规评价未完全完成：报告中的能力结论以已完成评分为准，缺失部分不按 0 分处理。",
+    "教师干预质量评分与模拟状态变化分别存储；前者为量规评价，后者为模拟演变结果。"
+   ],
+   "stable_threshold_pp": 2.0,
+   "unit_note": "变化以「百分点」表述；欺凌强度/受害者压力为 0–1 状态比例。",
+   "score_formula": "总分 = 有效评分维度等权平均（N/O 与证据不足不计入分母，也不按 0 分计）；严重风险时总分封顶 60（仅当原始均分高于 60 时生效）。"
+  }
+ }
+}

@@ -1,0 +1,132 @@
+# 校园话语霸凌与教师干预实训系统 v2.0 - 配置文件
+
+# 模拟设置
+simulation:
+  # 默认霸凌级别 (1-5)
+  default_level: 2
+  
+  # 每轮最大发言人数
+  max_speakers_per_round: 2
+  
+  # 最大对话轮数（按级别）
+  max_rounds:
+    1: 4   # 轻微
+    2: 6   # 一般
+    3: 8   # 中等
+    4: 10  # 严重
+    5: 12  # 极其严重
+
+# Agent 配置
+agents:
+  # 霸凌者
+  chenhao:
+    name: "陈浩"
+    role: "bully"
+    priority: 1  # 发言优先级
+    
+  # 被霸凌者
+  siyuan:
+    name: "思远"
+    role: "victim"
+    priority: 2
+    
+  # 正义旁观者
+  linyutong:
+    name: "林雨桐"
+    role: "bystander_a"
+    priority: 3
+    
+  # 从众旁观者
+  zhaolei:
+    name: "赵磊"
+    role: "bystander_b"
+    priority: 3
+
+# 霸凌级别定义
+bullying_levels:
+  1:
+    name: "轻微"
+    description: "偶尔的嘲笑、轻微言语冲突"
+    hostle_threshold: 1
+    mood_impact: 0.1
+    
+  2:
+    name: "一般"
+    description: "持续的语言嘲讽、轻微社交排斥"
+    hostle_threshold: 2
+    mood_impact: 0.25
+    
+  3:
+    name: "中等"
+    description: "明显的言语攻击、社交排斥"
+    hostle_threshold: 3
+    mood_impact: 0.45
+    
+  4:
+    name: "严重"
+    description: "持续的语言暴力、人身攻击"
+    hostle_threshold: 4
+    mood_impact: 0.65
+    
+  5:
+    name: "极其严重"
+    description: "极端的语言暴力、威胁恐吓"
+    hostle_threshold: 5
+    mood_impact: 0.85
+
+# 评估阈值
+evaluation:
+  # 霸凌强度阈值
+  bullying_intensity:
+    notice: 0.2    # 关注
+    warning: 0.4  # 警告
+    critical: 0.6  # 紧急
+    
+  # 受害者压力阈值
+  victim_distress:
+    notice: 0.3
+    warning: 0.4
+    critical: 0.5
+    
+  # 干预效果阈值
+  intervention_effectiveness:
+    poor: 0.2
+    fair: 0.4
+    good: 0.6
+    excellent: 0.8
+
+# 场景配置
+scenarios:
+  classroom:
+    name: "教室"
+    location: "教室"
+    default_time: "课间"
+    
+  hallway:
+    name: "走廊"
+    location: "学校走廊"
+    
+  cafeteria:
+    name: "食堂"
+    location: "学校食堂"
+    
+  playground:
+    name: "操场"
+    location: "学校操场"
+
+# 输出设置
+output:
+  # 日志目录
+  log_dir: "logs"
+  
+  # 学生档案目录
+  students_dir: "students"
+  
+  # 是否保存对话历史
+  save_history: true
+  
+  # 是否保存评估报告
+  save_reports: true
+  
+  # 报告格式
+  report_format: "json"

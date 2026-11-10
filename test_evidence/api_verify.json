@@ -1,0 +1,52 @@
+{
+  "status_code": 200,
+  "status_subset": {
+    "round": 5,
+    "finished": true,
+    "termination_reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。",
+    "result_type": "success",
+    "attack_frequency": 0.15,
+    "attack_severity": 0.15,
+    "persistence": 0.15,
+    "victim_safety": 0.0,
+    "follow_up_status": 0.0,
+    "retaliation_risk": 0.0,
+    "bullying_stopped_rounds": 3,
+    "bullying_stopped_required": 3,
+    "attack_frequency_max": 0.2,
+    "bullying_intensity_max": 0.2,
+    "remaining_to_stop": 0,
+    "bullying_intensity": 0.15
+  },
+  "status_has_all_diag_fields": true,
+  "report_code": 200,
+  "report_keys": [
+    "ability_assessment",
+    "improvement_suggestions",
+    "intervention_analysis",
+    "interventions",
+    "messages",
+    "metrics",
+    "obvq_analysis",
+    "report_data",
+    "round_analysis",
+    "session_duration",
+    "summary",
+    "total_rounds",
+    "training_report",
+    "trends"
+  ],
+  "report_result_type": null,
+  "report_auto_end_reason": null,
+  "report_summary_excerpt": "{'total_messages': 17, 'intervention_count': 0, 'skip_count': 4, 'total_decision_count': 4, 'bullying_intensity': 0.15, 'victim_distress': 0.0, 'intervention_effectiveness': 0, 'hostile_messages': 0}",
+  "db_row": {
+    "id": "s_3f991025e3c81cbf0f106b72",
+    "user_id": "u_75e522587c206e62",
+    "level": 1,
+    "status": "completed",
+    "result_type": "success",
+    "auto_end_reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。",
+    "created_at": "2026-11-09 17:01:29",
+    "completed_at": "2026-11-09 17:03:42"
+  }
+}

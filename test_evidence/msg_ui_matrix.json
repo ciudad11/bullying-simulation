@@ -1,0 +1,1304 @@
+{
+  "account": "msg_qa_1109a",
+  "base": "http://127.0.0.1:5000",
+  "items": {
+    "item1": {
+      "session_id": "8a419084",
+      "setup": {
+        "scenario": "scenario_1",
+        "level1": true,
+        "useLlm": false
+      },
+      "rounds": [
+        {
+          "round": 1,
+          "ui": {
+            "round": "1",
+            "intensity": "15%",
+            "distress": "12%",
+            "frequency": "15%",
+            "checkIntensity": "强度✓",
+            "checkFrequency": "频率✓",
+            "streak": "连续 0/3",
+            "remaining": "距结束还需 4 轮",
+            "gap": "卡点：连续达标进行中，还需 4 轮",
+            "badge": "运行中"
+          },
+          "api": {
+            "round": 1,
+            "remaining_to_stop": 4,
+            "bullying_stopped_rounds": 0,
+            "attack_frequency": 0.15,
+            "attack_frequency_max": 0.2,
+            "victim_distress": 0.121,
+            "victim_crisis_rounds": null,
+            "finished": false,
+            "result_type": "",
+            "termination_reason": ""
+          },
+          "ui_remaining_num": 4
+        },
+        {
+          "round": 2,
+          "ui": {
+            "round": "2",
+            "intensity": "15%",
+            "distress": "5%",
+            "frequency": "15%",
+            "checkIntensity": "强度✓",
+            "checkFrequency": "频率✓",
+            "streak": "连续 0/3",
+            "remaining": "距结束还需 3 轮",
+            "gap": "卡点：连续达标进行中，还需 3 轮",
+            "badge": "运行中"
+          },
+          "api": {
+            "round": 2,
+            "remaining_to_stop": 3,
+            "bullying_stopped_rounds": 0,
+            "attack_frequency": 0.15,
+            "attack_frequency_max": 0.2,
+            "victim_distress": 0.048,
+            "victim_crisis_rounds": null,
+            "finished": false,
+            "result_type": "",
+            "termination_reason": ""
+          },
+          "ui_remaining_num": 3
+        },
+        {
+          "round": 3,
+          "ui": {
+            "round": "3",
+            "intensity": "15%",
+            "distress": "0%",
+            "frequency": "15%",
+            "checkIntensity": "强度✓",
+            "checkFrequency": "频率✓",
+            "streak": "连续 1/3",
+            "remaining": "距结束还需 2 轮",
+            "gap": "卡点：连续达标进行中，还需 2 轮",
+            "badge": "运行中"
+          },
+          "api": {
+            "round": 3,
+            "remaining_to_stop": 2,
+            "bullying_stopped_rounds": 1,
+            "attack_frequency": 0.15,
+            "attack_frequency_max": 0.2,
+            "victim_distress": 0.0,
+            "victim_crisis_rounds": null,
+            "finished": false,
+            "result_type": "",
+            "termination_reason": ""
+          },
+          "ui_remaining_num": 2
+        },
+        {
+          "round": 4,
+          "ui": {
+            "round": "4",
+            "intensity": "15%",
+            "distress": "0%",
+            "frequency": "15%",
+            "checkIntensity": "强度✓",
+            "checkFrequency": "频率✓",
+            "streak": "连续 2/3",
+            "remaining": "距结束还需 1 轮",
+            "gap": "卡点：连续达标进行中，还需 1 轮",
+            "badge": "运行中"
+          },
+          "api": {
+            "round": 4,
+            "remaining_to_stop": 1,
+            "bullying_stopped_rounds": 2,
+            "attack_frequency": 0.15,
+            "attack_frequency_max": 0.2,
+            "victim_distress": 0.0,
+            "victim_crisis_rounds": null,
+            "finished": false,
+            "result_type": "",
+            "termination_reason": ""
+          },
+          "ui_remaining_num": 1
+        }
+      ],
+      "end_kind": "modal",
+      "at_round": 5,
+      "modal": {
+        "icon": "✅",
+        "title": "🎉 调解成功",
+        "subtitle": "恭喜！您有效制止了欺凌行为，保护了受害者",
+        "reason": "🎉 恭喜您有效制止了欺凌行为，保护了受害者！\n温馨提示：欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。",
+        "whiteSpace": "pre-line",
+        "active": true,
+        "display": "flex",
+        "convergenceDisplay": "none",
+        "reportModalActive": false,
+        "badge": "已结束",
+        "panel": {
+          "round": "5",
+          "remaining": "已达结束条件",
+          "streak": "连续 3/3",
+          "intensity": "15%",
+          "frequency": "15%"
+        },
+        "endMessageCount": 1,
+        "lastMessages": [
+          "林小满 (低着头不说话)",
+          "--- 第 5 轮对话 ---",
+          "刘洋 (跟着笑)哈哈哈...",
+          "徐凯 切,有什么了不起的。",
+          "林小满 (低着头不说话)",
+          "🛑 实训结束"
+        ],
+        "jsErrors": []
+      },
+      "api": {
+        "round": 5,
+        "remaining_to_stop": 0,
+        "bullying_stopped_rounds": 3,
+        "attack_frequency": 0.15,
+        "attack_frequency_max": 0.2,
+        "victim_distress": 0.0,
+        "victim_crisis_rounds": null,
+        "finished": true,
+        "result_type": "success",
+        "termination_reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。"
+      },
+      "db_session_id": "s_4b9a36717ab3c2bb05fefa1b",
+      "db": {
+        "session_row": {
+          "id": "s_4b9a36717ab3c2bb05fefa1b",
+          "status": "completed",
+          "result_type": "success",
+          "auto_end_reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。",
+          "completed_at": "2026-11-09 21:15:38"
+        },
+        "report_row_count": 1,
+        "report_snapshot": {
+          "metrics_round": 5,
+          "finished": true,
+          "result_type": "success",
+          "termination_reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。",
+          "message_rounds": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "total_rounds": 5
+        }
+      },
+      "checks": {
+        "title": true,
+        "subtitle": true,
+        "reason_exact": true,
+        "remaining_4_to_0": true,
+        "end_round5": true,
+        "db_completed_success_reason": true,
+        "report_single_row": true,
+        "report_round5_finished": true,
+        "report_messages_1_to_5": true,
+        "final_dialogue_marker": true,
+        "no_js_errors": true
+      }
+    },
+    "item2": {
+      "session_id": "9926dc63",
+      "config": {
+        "status_code": 200,
+        "written": {
+          "victim_safety_min": 0,
+          "follow_up_status_min": 0
+        },
+        "response": {
+          "success": true,
+          "config": {
+            "bullying_stopped_rounds": 3,
+            "intervention_effective_rounds": 4,
+            "victim_crisis_threshold": 0.95,
+            "victim_crisis_rounds": 3,
+            "max_rounds": 40,
+            "min_rounds": 3
+          },
+          "convergence": {
+            "bullying_intensity_max": 0.2,
+            "attack_frequency_max": 0.2,
+            "victim_safety_min": 0.0,
+            "retaliation_risk_max": 0.3,
+            "follow_up_status_min": 0.0,
+            "partial_round_min": 10,
+            "partial_intensity_max": 0.3
+          },
+          "applied": {
+            "victim_safety_min": 0.0,
+            "follow_up_status_min": 0.0
+          }
+        },
+        "readback": {
+          "success": true,
+          "config": {
+            "bullying_stopped_rounds": 3,
+            "intervention_effective_rounds": 4,
+            "victim_crisis_threshold": 0.95,
+            "victim_crisis_rounds": 3,
+            "max_rounds": 40,
+            "min_rounds": 3
+          },
+          "convergence": {
+            "bullying_intensity_max": 0.2,
+            "attack_frequency_max": 0.2,
+            "victim_safety_min": 0.0,
+            "retaliation_risk_max": 0.3,
+            "follow_up_status_min": 0.0,
+            "partial_round_min": 10,
+            "partial_intensity_max": 0.3
+          },
+          "applied": {}
+        }
+      },
+      "rounds": [
+        {
+          "round": 1,
+          "ui": {
+            "round": "1",
+            "intensity": "15%",
+            "distress": "9%",
+            "frequency": "15%",
+            "checkIntensity": "强度✓",
+            "checkFrequency": "频率✓",
+            "streak": "连续 0/3",
+            "remaining": "距结束还需 4 轮",
+            "gap": "卡点：连续达标进行中，还需 4 轮",
+            "badge": "运行中"
+          },
+          "api": {
+            "round": 1,
+            "remaining_to_stop": 4,
+            "bullying_stopped_rounds": 0,
+            "attack_frequency": 0.15,
+            "attack_frequency_max": 0.2,
+            "victim_distress": 0.09,
+            "victim_crisis_rounds": null,
+            "finished": false,
+            "result_type": "",
+            "termination_reason": ""
+          },
+          "ui_remaining_num": 4
+        },
+        {
+          "round": 2,
+          "ui": {
+            "round": "2",
+            "intensity": "15%",
+            "distress": "2%",
+            "frequency": "15%",
+            "checkIntensity": "强度✓",
+            "checkFrequency": "频率✓",
+            "streak": "连续 0/3",
+            "remaining": "距结束还需 3 轮",
+            "gap": "卡点：连续达标进行中，还需 3 轮",
+            "badge": "运行中"
+          },
+          "api": {
+            "round": 2,
+            "remaining_to_stop": 3,
+            "bullying_stopped_rounds": 0,
+            "attack_frequency": 0.15,
+            "attack_frequency_max": 0.2,
+            "victim_distress": 0.018,
+            "victim_crisis_rounds": null,
+            "finished": false,
+            "result_type": "",
+            "termination_reason": ""
+          },
+          "ui_remaining_num": 3
+        },
+        {
+          "round": 3,
+          "ui": {
+            "round": "3",
+            "intensity": "15%",
+            "distress": "0%",
+            "frequency": "15%",
+            "checkIntensity": "强度✓",
+            "checkFrequency": "频率✓",
+            "streak": "连续 1/3",
+            "remaining": "距结束还需 2 轮",
+            "gap": "卡点：连续达标进行中，还需 2 轮",
+            "badge": "运行中"
+          },
+          "api": {
+            "round": 3,
+            "remaining_to_stop": 2,
+            "bullying_stopped_rounds": 1,
+            "attack_frequency": 0.15,
+            "attack_frequency_max": 0.2,
+            "victim_distress": 0.0,
+            "victim_crisis_rounds": null,
+            "finished": false,
+            "result_type": "",
+            "termination_reason": ""
+          },
+          "ui_remaining_num": 2
+        },
+        {
+          "round": 4,
+          "ui": {
+            "round": "4",
+            "intensity": "15%",
+            "distress": "0%",
+            "frequency": "15%",
+            "checkIntensity": "强度✓",
+            "checkFrequency": "频率✓",
+            "streak": "连续 2/3",
+            "remaining": "距结束还需 1 轮",
+            "gap": "卡点：连续达标进行中，还需 1 轮",
+            "badge": "运行中"
+          },
+          "api": {
+            "round": 4,
+            "remaining_to_stop": 1,
+            "bullying_stopped_rounds": 2,
+            "attack_frequency": 0.15,
+            "attack_frequency_max": 0.2,
+            "victim_distress": 0.0,
+            "victim_crisis_rounds": null,
+            "finished": false,
+            "result_type": "",
+            "termination_reason": ""
+          },
+          "ui_remaining_num": 1
+        }
+      ],
+      "end_kind": "modal",
+      "at_round": 5,
+      "modal": {
+        "icon": "✅",
+        "title": "🎉 调解成功",
+        "subtitle": "恭喜！您有效制止了欺凌行为，保护了受害者",
+        "reason": "🎉 恭喜您有效制止了欺凌行为，保护了受害者！",
+        "whiteSpace": "pre-line",
+        "active": true,
+        "display": "flex",
+        "convergenceDisplay": "none",
+        "reportModalActive": false,
+        "badge": "已结束",
+        "panel": {
+          "round": "5",
+          "remaining": "已达结束条件",
+          "streak": "连续 3/3",
+          "intensity": "15%",
+          "frequency": "15%"
+        },
+        "endMessageCount": 1,
+        "lastMessages": [
+          "林小满 (小声)我...我没有...",
+          "--- 第 5 轮对话 ---",
+          "刘洋 好像是有点好笑...",
+          "徐凯 切,有什么了不起的。",
+          "林小满 (小声)我...我没有...",
+          "🛑 实训结束"
+        ],
+        "jsErrors": []
+      },
+      "api": {
+        "round": 5,
+        "remaining_to_stop": 0,
+        "bullying_stopped_rounds": 3,
+        "attack_frequency": 0.15,
+        "attack_frequency_max": 0.2,
+        "victim_distress": 0.0,
+        "victim_crisis_rounds": null,
+        "finished": true,
+        "result_type": "success",
+        "termination_reason": "欺凌现象停止，调解成功。"
+      },
+      "checks": {
+        "config_applied": true,
+        "title": true,
+        "subtitle": true,
+        "reason_exact_pure": true,
+        "no_reminder": true,
+        "end_round5": true,
+        "no_js_errors": true
+      }
+    },
+    "item3": {
+      "session_id": "e61973fa",
+      "config": {
+        "status_code": 200,
+        "written": {
+          "victim_crisis_threshold": 0.8,
+          "victim_crisis_rounds": 1
+        },
+        "response": {
+          "success": true,
+          "config": {
+            "bullying_stopped_rounds": 3,
+            "intervention_effective_rounds": 4,
+            "victim_crisis_threshold": 0.8,
+            "victim_crisis_rounds": 1,
+            "max_rounds": 40,
+            "min_rounds": 3
+          },
+          "convergence": {
+            "bullying_intensity_max": 0.2,
+            "attack_frequency_max": 0.2,
+            "victim_safety_min": 0.7,
+            "retaliation_risk_max": 0.3,
+            "follow_up_status_min": 0.5,
+            "partial_round_min": 10,
+            "partial_intensity_max": 0.3
+          },
+          "applied": {
+            "victim_crisis_threshold": 0.8,
+            "victim_crisis_rounds": 1
+          }
+        },
+        "readback": {
+          "success": true,
+          "config": {
+            "bullying_stopped_rounds": 3,
+            "intervention_effective_rounds": 4,
+            "victim_crisis_threshold": 0.8,
+            "victim_crisis_rounds": 1,
+            "max_rounds": 40,
+            "min_rounds": 3
+          },
+          "convergence": {
+            "bullying_intensity_max": 0.2,
+            "attack_frequency_max": 0.2,
+            "victim_safety_min": 0.7,
+            "retaliation_risk_max": 0.3,
+            "follow_up_status_min": 0.5,
+            "partial_round_min": 10,
+            "partial_intensity_max": 0.3
+          },
+          "applied": {}
+        }
+      },
+      "rounds": [
+        {
+          "round": 1,
+          "ui": {
+            "round": "1",
+            "intensity": "75%",
+            "distress": "86%",
+            "frequency": "75%",
+            "checkIntensity": "强度✗",
+            "checkFrequency": "频率✗",
+            "streak": "连续 0/3",
+            "remaining": "距结束还需 4 轮",
+            "gap": "卡点：霸凌强度 75%（需 <20%）；攻击频率 75%（需 <20%）",
+            "badge": "运行中"
+          },
+          "api": {
+            "round": 1,
+            "remaining_to_stop": 4,
+            "bullying_stopped_rounds": 0,
+            "attack_frequency": 0.75,
+            "attack_frequency_max": 0.2,
+            "victim_distress": 0.861,
+            "victim_crisis_rounds": null,
+            "finished": false,
+            "result_type": "",
+            "termination_reason": ""
+          },
+          "ui_remaining_num": 4
+        }
+      ],
+      "end_kind": "modal",
+      "at_round": 2,
+      "modal": {
+        "icon": "💪",
+        "title": "💪 调解未成功",
+        "subtitle": "别灰心，每次尝试都是宝贵的经验",
+        "reason": "建议复盘干预时机与方式，调整策略后再试一次！\n事实原因：受害者压力过大，调解失败。",
+        "whiteSpace": "pre-line",
+        "active": true,
+        "display": "flex",
+        "convergenceDisplay": "none",
+        "reportModalActive": false,
+        "badge": "已结束",
+        "panel": {
+          "round": "2",
+          "remaining": "距结束还需 3 轮",
+          "streak": "连续 0/3",
+          "intensity": "75%",
+          "frequency": "75%"
+        },
+        "endMessageCount": 1,
+        "lastMessages": [
+          "林小满 (无声落泪,不敢看任何人)",
+          "--- 第 2 轮对话 ---",
+          "徐凯 你这种废物就不该存在!",
+          "林小满 (蜷缩在座位上)",
+          "苏晴 你这是犯罪行为你知道吗!",
+          "🛑 实训结束"
+        ],
+        "jsErrors": []
+      },
+      "api": {
+        "round": 2,
+        "remaining_to_stop": 3,
+        "bullying_stopped_rounds": 0,
+        "attack_frequency": 0.75,
+        "attack_frequency_max": 0.2,
+        "victim_distress": 0.92,
+        "victim_crisis_rounds": null,
+        "finished": true,
+        "result_type": "failure",
+        "termination_reason": "受害者压力过大，调解失败。"
+      },
+      "checks": {
+        "config_applied": true,
+        "title": true,
+        "subtitle": true,
+        "reason_exact": true,
+        "api_failure": true,
+        "no_js_errors": true
+      }
+    },
+    "item4": {
+      "session_id": "e441d243",
+      "config": {
+        "status_code": 200,
+        "written": {
+          "max_rounds": 3
+        },
+        "response": {
+          "success": true,
+          "config": {
+            "bullying_stopped_rounds": 3,
+            "intervention_effective_rounds": 4,
+            "victim_crisis_threshold": 0.95,
+            "victim_crisis_rounds": 3,
+            "max_rounds": 3,
+            "min_rounds": 3
+          },
+          "convergence": {
+            "bullying_intensity_max": 0.2,
+            "attack_frequency_max": 0.2,
+            "victim_safety_min": 0.7,
+            "retaliation_risk_max": 0.3,
+            "follow_up_status_min": 0.5,
+            "partial_round_min": 10,
+            "partial_intensity_max": 0.3
+          },
+          "applied": {
+            "max_rounds": 3
+          }
+        },
+        "readback": {
+          "success": true,
+          "config": {
+            "bullying_stopped_rounds": 3,
+            "intervention_effective_rounds": 4,
+            "victim_crisis_threshold": 0.95,
+            "victim_crisis_rounds": 3,
+            "max_rounds": 3,
+            "min_rounds": 3
+          },
+          "convergence": {
+            "bullying_intensity_max": 0.2,
+            "attack_frequency_max": 0.2,
+            "victim_safety_min": 0.7,
+            "retaliation_risk_max": 0.3,
+            "follow_up_status_min": 0.5,
+            "partial_round_min": 10,
+            "partial_intensity_max": 0.3
+          },
+          "applied": {}
+        }
+      },
+      "rounds": [
+        {
+          "round": 1,
+          "ui": {
+            "round": "1",
+            "intensity": "15%",
+            "distress": "9%",
+            "frequency": "15%",
+            "checkIntensity": "强度✓",
+            "checkFrequency": "频率✓",
+            "streak": "连续 0/3",
+            "remaining": "距结束还需 4 轮",
+            "gap": "卡点：连续达标进行中，还需 4 轮",
+            "badge": "运行中"
+          },
+          "api": {
+            "round": 1,
+            "remaining_to_stop": 4,
+            "bullying_stopped_rounds": 0,
+            "attack_frequency": 0.15,
+            "attack_frequency_max": 0.2,
+            "victim_distress": 0.09,
+            "victim_crisis_rounds": null,
+            "finished": false,
+            "result_type": "",
+            "termination_reason": ""
+          },
+          "ui_remaining_num": 4
+        },
+        {
+          "round": 2,
+          "ui": {
+            "round": "2",
+            "intensity": "15%",
+            "distress": "0%",
+            "frequency": "15%",
+            "checkIntensity": "强度✓",
+            "checkFrequency": "频率✓",
+            "streak": "连续 0/3",
+            "remaining": "距结束还需 3 轮",
+            "gap": "卡点：连续达标进行中，还需 3 轮",
+            "badge": "运行中"
+          },
+          "api": {
+            "round": 2,
+            "remaining_to_stop": 3,
+            "bullying_stopped_rounds": 0,
+            "attack_frequency": 0.15,
+            "attack_frequency_max": 0.2,
+            "victim_distress": 0.0,
+            "victim_crisis_rounds": null,
+            "finished": false,
+            "result_type": "",
+            "termination_reason": ""
+          },
+          "ui_remaining_num": 3
+        }
+      ],
+      "end_kind": "modal",
+      "at_round": 3,
+      "modal": {
+        "icon": "⏰",
+        "title": "⏰ 本轮模拟结束",
+        "subtitle": "对话轮次已达上限",
+        "reason": "报告将基于已有数据生成分析，欢迎调整策略再试一次！",
+        "whiteSpace": "pre-line",
+        "active": true,
+        "display": "flex",
+        "convergenceDisplay": "none",
+        "reportModalActive": false,
+        "badge": "已结束",
+        "panel": {
+          "round": "3",
+          "remaining": "距结束还需 3 轮",
+          "streak": "连续 0/3",
+          "intensity": "15%",
+          "frequency": "15%"
+        },
+        "endMessageCount": 1,
+        "lastMessages": [
+          "林小满 (低着头不说话)",
+          "--- 第 3 轮对话 ---",
+          "刘洋 (跟着笑)哈哈哈...",
+          "徐凯 这画得也太丑了吧,哈哈哈!",
+          "林小满 (低着头不说话)",
+          "🛑 实训结束"
+        ],
+        "jsErrors": []
+      },
+      "api": {
+        "round": 3,
+        "remaining_to_stop": 3,
+        "bullying_stopped_rounds": 0,
+        "attack_frequency": 0.15,
+        "attack_frequency_max": 0.2,
+        "victim_distress": 0.0,
+        "victim_crisis_rounds": null,
+        "finished": true,
+        "result_type": "timeout",
+        "termination_reason": "对话轮次已达上限，未能有效解决。"
+      },
+      "checks": {
+        "config_applied": true,
+        "title": true,
+        "subtitle": true,
+        "reason_exact": true,
+        "end_round3": true,
+        "api_timeout": true,
+        "no_js_errors": true
+      }
+    },
+    "item5": {
+      "during_round": {
+        "session_id": "2366ccbc",
+        "first": {
+          "modal": {
+            "icon": "📋",
+            "title": "📋 实训已结束",
+            "subtitle": "您已主动结束本次模拟",
+            "reason": "报告将基于已有对话与干预数据生成分析，供您复盘参考。",
+            "whiteSpace": "pre-line",
+            "active": true,
+            "display": "flex",
+            "convergenceDisplay": "none",
+            "reportModalActive": false,
+            "badge": "已结束",
+            "panel": {
+              "round": "2",
+              "remaining": "距结束还需 3 轮",
+              "streak": "连续 0/3",
+              "intensity": "15%",
+              "frequency": "15%"
+            },
+            "endMessageCount": 1,
+            "lastMessages": [
+              "刘洋 好像是有点好笑...",
+              "林小满 (小声)我...我没有...",
+              "--- 第 2 轮对话 ---",
+              "苏晴 这样说有点过分了吧。",
+              "⏹️ 正在停止...",
+              "🛑 实训结束"
+            ],
+            "jsErrors": []
+          },
+          "api": {
+            "round": 2,
+            "remaining_to_stop": 3,
+            "bullying_stopped_rounds": 0,
+            "attack_frequency": 0.15,
+            "attack_frequency_max": 0.2,
+            "victim_distress": 0.015,
+            "victim_crisis_rounds": null,
+            "finished": false,
+            "result_type": "",
+            "termination_reason": ""
+          }
+        },
+        "after_repeat": {
+          "icon": "📋",
+          "title": "📋 实训已结束",
+          "subtitle": "您已主动结束本次模拟",
+          "reason": "报告将基于已有对话与干预数据生成分析，供您复盘参考。",
+          "whiteSpace": "pre-line",
+          "active": true,
+          "display": "flex",
+          "convergenceDisplay": "none",
+          "reportModalActive": false,
+          "badge": "已结束",
+          "panel": {
+            "round": "2",
+            "remaining": "距结束还需 3 轮",
+            "streak": "连续 0/3",
+            "intensity": "15%",
+            "frequency": "15%"
+          },
+          "endMessageCount": 1,
+          "lastMessages": [
+            "刘洋 好像是有点好笑...",
+            "林小满 (小声)我...我没有...",
+            "--- 第 2 轮对话 ---",
+            "苏晴 这样说有点过分了吧。",
+            "⏹️ 正在停止...",
+            "🛑 实训结束"
+          ],
+          "jsErrors": []
+        },
+        "report_modal_open": true
+      },
+      "between_rounds": {
+        "session_id": "357acd3a",
+        "first": {
+          "modal": {
+            "icon": "📋",
+            "title": "📋 实训已结束",
+            "subtitle": "您已主动结束本次模拟",
+            "reason": "报告将基于已有对话与干预数据生成分析，供您复盘参考。",
+            "whiteSpace": "pre-line",
+            "active": true,
+            "display": "flex",
+            "convergenceDisplay": "none",
+            "reportModalActive": false,
+            "badge": "已结束",
+            "panel": {
+              "round": "1",
+              "remaining": "距结束还需 4 轮",
+              "streak": "连续 0/3",
+              "intensity": "15%",
+              "frequency": "15%"
+            },
+            "endMessageCount": 1,
+            "lastMessages": [
+              "系统 [场景] 美术课上的嘲笑：【背景】美术课上，老师让同学依次展示自己的画作，被霸凌者认真画了一幅画，轮到展示。 【霸凌者】你觉得她的画很丑，想当众取笑她，并带动其他同学一起哄笑。 【受害者】你对自己的画挺在意，被当众嘲笑后感到难堪和委屈。 【正义旁观者】你觉得当众嘲笑别人的画很过分，想替她说话。 【从众旁观者】你看到有人起哄，犹豫要不要跟着笑。",
+              "徐凯 这画得也太丑了吧,哈哈哈!",
+              "刘洋 (跟着笑)哈哈哈...",
+              "林小满 (低着头不说话)",
+              "⏹️ 正在停止...",
+              "🛑 实训结束"
+            ],
+            "jsErrors": []
+          },
+          "api": {
+            "round": 1,
+            "remaining_to_stop": 4,
+            "bullying_stopped_rounds": 0,
+            "attack_frequency": 0.15,
+            "attack_frequency_max": 0.2,
+            "victim_distress": 0.09,
+            "victim_crisis_rounds": null,
+            "finished": false,
+            "result_type": "",
+            "termination_reason": ""
+          }
+        },
+        "after_repeat": {
+          "icon": "📋",
+          "title": "📋 实训已结束",
+          "subtitle": "您已主动结束本次模拟",
+          "reason": "报告将基于已有对话与干预数据生成分析，供您复盘参考。",
+          "whiteSpace": "pre-line",
+          "active": true,
+          "display": "flex",
+          "convergenceDisplay": "none",
+          "reportModalActive": false,
+          "badge": "已结束",
+          "panel": {
+            "round": "1",
+            "remaining": "距结束还需 4 轮",
+            "streak": "连续 0/3",
+            "intensity": "15%",
+            "frequency": "15%"
+          },
+          "endMessageCount": 1,
+          "lastMessages": [
+            "系统 [场景] 美术课上的嘲笑：【背景】美术课上，老师让同学依次展示自己的画作，被霸凌者认真画了一幅画，轮到展示。 【霸凌者】你觉得她的画很丑，想当众取笑她，并带动其他同学一起哄笑。 【受害者】你对自己的画挺在意，被当众嘲笑后感到难堪和委屈。 【正义旁观者】你觉得当众嘲笑别人的画很过分，想替她说话。 【从众旁观者】你看到有人起哄，犹豫要不要跟着笑。",
+            "徐凯 这画得也太丑了吧,哈哈哈!",
+            "刘洋 (跟着笑)哈哈哈...",
+            "林小满 (低着头不说话)",
+            "⏹️ 正在停止...",
+            "🛑 实训结束"
+          ],
+          "jsErrors": []
+        },
+        "report_modal_open": true
+      },
+      "checks": {
+        "during_round_title": true,
+        "during_round_subtitle": true,
+        "during_round_reason": true,
+        "during_round_badge": true,
+        "during_round_single_end_message": true,
+        "during_round_report_usable": true,
+        "during_round_no_js_errors": true,
+        "between_rounds_title": true,
+        "between_rounds_subtitle": true,
+        "between_rounds_reason": true,
+        "between_rounds_badge": true,
+        "between_rounds_single_end_message": true,
+        "between_rounds_report_usable": true,
+        "between_rounds_no_js_errors": true
+      }
+    },
+    "item6": {
+      "session_id": "7d384501",
+      "config": {
+        "status_code": 200,
+        "written": {
+          "bullying_stopped_rounds": 20,
+          "max_rounds": 30,
+          "victim_safety_min": 0,
+          "follow_up_status_min": 0,
+          "retaliation_risk_max": 1
+        },
+        "response": {
+          "success": true,
+          "config": {
+            "bullying_stopped_rounds": 20,
+            "intervention_effective_rounds": 4,
+            "victim_crisis_threshold": 0.95,
+            "victim_crisis_rounds": 3,
+            "max_rounds": 30,
+            "min_rounds": 3
+          },
+          "convergence": {
+            "bullying_intensity_max": 0.2,
+            "attack_frequency_max": 0.2,
+            "victim_safety_min": 0.0,
+            "retaliation_risk_max": 1.0,
+            "follow_up_status_min": 0.0,
+            "partial_round_min": 10,
+            "partial_intensity_max": 0.3
+          },
+          "applied": {
+            "bullying_stopped_rounds": 20,
+            "max_rounds": 30,
+            "victim_safety_min": 0.0,
+            "follow_up_status_min": 0.0,
+            "retaliation_risk_max": 1.0
+          }
+        },
+        "readback": {
+          "success": true,
+          "config": {
+            "bullying_stopped_rounds": 20,
+            "intervention_effective_rounds": 4,
+            "victim_crisis_threshold": 0.95,
+            "victim_crisis_rounds": 3,
+            "max_rounds": 30,
+            "min_rounds": 3
+          },
+          "convergence": {
+            "bullying_intensity_max": 0.2,
+            "attack_frequency_max": 0.2,
+            "victim_safety_min": 0.0,
+            "retaliation_risk_max": 1.0,
+            "follow_up_status_min": 0.0,
+            "partial_round_min": 10,
+            "partial_intensity_max": 0.3
+          },
+          "applied": {}
+        }
+      },
+      "attempt": "prescribed keys",
+      "rounds": [
+        {
+          "round": 1,
+          "ui": {
+            "round": "1",
+            "intensity": "15%",
+            "distress": "9%",
+            "frequency": "15%",
+            "checkIntensity": "强度✓",
+            "checkFrequency": "频率✓",
+            "streak": "连续 0/3",
+            "remaining": "距结束还需 4 轮",
+            "gap": "卡点：连续达标进行中，还需 4 轮",
+            "badge": "运行中"
+          },
+          "api": {
+            "round": 1,
+            "remaining_to_stop": 21,
+            "bullying_stopped_rounds": 0,
+            "attack_frequency": 0.15,
+            "attack_frequency_max": 0.2,
+            "victim_distress": 0.09,
+            "victim_crisis_rounds": null,
+            "finished": false,
+            "result_type": "",
+            "termination_reason": ""
+          },
+          "ui_remaining_num": 4
+        },
+        {
+          "round": 2,
+          "ui": {
+            "round": "2",
+            "intensity": "15%",
+            "distress": "2%",
+            "frequency": "15%",
+            "checkIntensity": "强度✓",
+            "checkFrequency": "频率✓",
+            "streak": "连续 0/20",
+            "remaining": "距结束还需 20 轮",
+            "gap": "卡点：连续达标进行中，还需 20 轮",
+            "badge": "运行中"
+          },
+          "api": {
+            "round": 2,
+            "remaining_to_stop": 20,
+            "bullying_stopped_rounds": 0,
+            "attack_frequency": 0.15,
+            "attack_frequency_max": 0.2,
+            "victim_distress": 0.018,
+            "victim_crisis_rounds": null,
+            "finished": false,
+            "result_type": "",
+            "termination_reason": ""
+          },
+          "ui_remaining_num": 20
+        },
+        {
+          "round": 3,
+          "ui": {
+            "round": "3",
+            "intensity": "15%",
+            "distress": "2%",
+            "frequency": "15%",
+            "checkIntensity": "强度✓",
+            "checkFrequency": "频率✓",
+            "streak": "连续 1/20",
+            "remaining": "距结束还需 19 轮",
+            "gap": "卡点：连续达标进行中，还需 19 轮",
+            "badge": "运行中"
+          },
+          "api": {
+            "round": 3,
+            "remaining_to_stop": 19,
+            "bullying_stopped_rounds": 1,
+            "attack_frequency": 0.15,
+            "attack_frequency_max": 0.2,
+            "victim_distress": 0.018,
+            "victim_crisis_rounds": null,
+            "finished": false,
+            "result_type": "",
+            "termination_reason": ""
+          },
+          "ui_remaining_num": 19
+        },
+        {
+          "round": 4,
+          "ui": {
+            "round": "4",
+            "intensity": "15%",
+            "distress": "0%",
+            "frequency": "15%",
+            "checkIntensity": "强度✓",
+            "checkFrequency": "频率✓",
+            "streak": "连续 2/20",
+            "remaining": "距结束还需 18 轮",
+            "gap": "卡点：连续达标进行中，还需 18 轮",
+            "badge": "运行中"
+          },
+          "api": {
+            "round": 4,
+            "remaining_to_stop": 18,
+            "bullying_stopped_rounds": 2,
+            "attack_frequency": 0.15,
+            "attack_frequency_max": 0.2,
+            "victim_distress": 0.0,
+            "victim_crisis_rounds": null,
+            "finished": false,
+            "result_type": "",
+            "termination_reason": ""
+          },
+          "ui_remaining_num": 18
+        },
+        {
+          "round": 5,
+          "ui": {
+            "round": "5",
+            "intensity": "15%",
+            "distress": "0%",
+            "frequency": "15%",
+            "checkIntensity": "强度✓",
+            "checkFrequency": "频率✓",
+            "streak": "连续 3/20",
+            "remaining": "距结束还需 17 轮",
+            "gap": "卡点：连续达标进行中，还需 17 轮",
+            "badge": "运行中"
+          },
+          "api": {
+            "round": 5,
+            "remaining_to_stop": 17,
+            "bullying_stopped_rounds": 3,
+            "attack_frequency": 0.15,
+            "attack_frequency_max": 0.2,
+            "victim_distress": 0.0,
+            "victim_crisis_rounds": null,
+            "finished": false,
+            "result_type": "",
+            "termination_reason": ""
+          },
+          "ui_remaining_num": 17
+        },
+        {
+          "round": 6,
+          "ui": {
+            "round": "6",
+            "intensity": "15%",
+            "distress": "0%",
+            "frequency": "15%",
+            "checkIntensity": "强度✓",
+            "checkFrequency": "频率✓",
+            "streak": "连续 4/20",
+            "remaining": "距结束还需 16 轮",
+            "gap": "卡点：连续达标进行中，还需 16 轮",
+            "badge": "运行中"
+          },
+          "api": {
+            "round": 6,
+            "remaining_to_stop": 16,
+            "bullying_stopped_rounds": 4,
+            "attack_frequency": 0.15,
+            "attack_frequency_max": 0.2,
+            "victim_distress": 0.0,
+            "victim_crisis_rounds": null,
+            "finished": false,
+            "result_type": "",
+            "termination_reason": ""
+          },
+          "ui_remaining_num": 16
+        },
+        {
+          "round": 7,
+          "ui": {
+            "round": "7",
+            "intensity": "15%",
+            "distress": "0%",
+            "frequency": "15%",
+            "checkIntensity": "强度✓",
+            "checkFrequency": "频率✓",
+            "streak": "连续 5/20",
+            "remaining": "距结束还需 15 轮",
+            "gap": "卡点：连续达标进行中，还需 15 轮",
+            "badge": "运行中"
+          },
+          "api": {
+            "round": 7,
+            "remaining_to_stop": 15,
+            "bullying_stopped_rounds": 5,
+            "attack_frequency": 0.15,
+            "attack_frequency_max": 0.2,
+            "victim_distress": 0.0,
+            "victim_crisis_rounds": null,
+            "finished": false,
+            "result_type": "",
+            "termination_reason": ""
+          },
+          "ui_remaining_num": 15
+        },
+        {
+          "round": 8,
+          "ui": {
+            "round": "8",
+            "intensity": "15%",
+            "distress": "0%",
+            "frequency": "15%",
+            "checkIntensity": "强度✓",
+            "checkFrequency": "频率✓",
+            "streak": "连续 6/20",
+            "remaining": "距结束还需 14 轮",
+            "gap": "卡点：连续达标进行中，还需 14 轮",
+            "badge": "运行中"
+          },
+          "api": {
+            "round": 8,
+            "remaining_to_stop": 14,
+            "bullying_stopped_rounds": 6,
+            "attack_frequency": 0.15,
+            "attack_frequency_max": 0.2,
+            "victim_distress": 0.0,
+            "victim_crisis_rounds": null,
+            "finished": false,
+            "result_type": "",
+            "termination_reason": ""
+          },
+          "ui_remaining_num": 14
+        },
+        {
+          "round": 9,
+          "ui": {
+            "round": "9",
+            "intensity": "15%",
+            "distress": "0%",
+            "frequency": "15%",
+            "checkIntensity": "强度✓",
+            "checkFrequency": "频率✓",
+            "streak": "连续 7/20",
+            "remaining": "距结束还需 13 轮",
+            "gap": "卡点：连续达标进行中，还需 13 轮",
+            "badge": "运行中"
+          },
+          "api": {
+            "round": 9,
+            "remaining_to_stop": 13,
+            "bullying_stopped_rounds": 7,
+            "attack_frequency": 0.15,
+            "attack_frequency_max": 0.2,
+            "victim_distress": 0.0,
+            "victim_crisis_rounds": null,
+            "finished": false,
+            "result_type": "",
+            "termination_reason": ""
+          },
+          "ui_remaining_num": 13
+        },
+        {
+          "round": 10,
+          "ui": {
+            "round": "10",
+            "intensity": "15%",
+            "distress": "0%",
+            "frequency": "15%",
+            "checkIntensity": "强度✓",
+            "checkFrequency": "频率✓",
+            "streak": "连续 8/20",
+            "remaining": "距结束还需 12 轮",
+            "gap": "卡点：连续达标进行中，还需 12 轮",
+            "badge": "运行中"
+          },
+          "api": {
+            "round": 10,
+            "remaining_to_stop": 12,
+            "bullying_stopped_rounds": 8,
+            "attack_frequency": 0.15,
+            "attack_frequency_max": 0.2,
+            "victim_distress": 0.0,
+            "victim_crisis_rounds": null,
+            "finished": false,
+            "result_type": "",
+            "termination_reason": ""
+          },
+          "ui_remaining_num": 12
+        }
+      ],
+      "end_kind": "max_rounds",
+      "at_round": 10,
+      "convergence": null,
+      "autoend": {
+        "modal": {
+          "icon": "📋",
+          "title": "📋 实训已结束",
+          "subtitle": "您已主动结束本次模拟",
+          "reason": "报告将基于已有对话与干预数据生成分析，供您复盘参考。",
+          "whiteSpace": "pre-line",
+          "active": true,
+          "display": "flex",
+          "convergenceDisplay": "none",
+          "reportModalActive": false,
+          "badge": "已结束",
+          "panel": {
+            "round": "10",
+            "remaining": "距结束还需 12 轮",
+            "streak": "连续 8/20",
+            "intensity": "15%",
+            "frequency": "15%"
+          },
+          "endMessageCount": 1,
+          "lastMessages": [
+            "徐凯 切,有什么了不起的。",
+            "林小满 (小声)我...我没有...",
+            "--- 第 11 轮对话 ---",
+            "⏹️ 正在停止...",
+            "⏹️ 已停止",
+            "🛑 实训结束"
+          ],
+          "jsErrors": []
+        },
+        "api": {
+          "round": 11,
+          "remaining_to_stop": 11,
+          "bullying_stopped_rounds": 9,
+          "attack_frequency": 0.15,
+          "attack_frequency_max": 0.2,
+          "victim_distress": 0.0,
+          "victim_crisis_rounds": null,
+          "finished": false,
+          "result_type": "",
+          "termination_reason": ""
+        }
+      }
+    }
+  },
+  "js_errors": [],
+  "register_status": 200,
+  "logged_in": true,
+  "home_cache": [
+    "http://127.0.0.1:5000/js/app.js?v=2026110901"
+  ],
+  "session_ids": {
+    "item1": "8a419084",
+    "item2": "9926dc63",
+    "item3": "e61973fa",
+    "item4": "e441d243",
+    "item5": null,
+    "item6": "7d384501"
+  }
+}

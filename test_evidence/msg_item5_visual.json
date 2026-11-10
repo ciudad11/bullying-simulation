@@ -1,0 +1,11 @@
+{
+  "modal": {
+    "title": "📋 实训已结束",
+    "subtitle": "您已主动结束本次模拟",
+    "reason": "报告将基于已有对话与干预数据生成分析，供您复盘参考。",
+    "badge": "已结束",
+    "endMessageCount": 1,
+    "sessionId": "45ede04c"
+  },
+  "report_open": true
+}

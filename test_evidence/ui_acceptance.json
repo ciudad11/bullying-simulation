@@ -1,0 +1,111 @@
+{
+  "steps": [
+    {
+      "step": "logged_in",
+      "data": {
+        "user": "qa_autoend_1109a"
+      }
+    },
+    {
+      "step": "setup",
+      "data": {
+        "scenario": "scenario_1",
+        "level1Active": true,
+        "levelInfo": "1级 - 轻微 偶尔的嘲笑、轻微言语冲突",
+        "useLlm": false,
+        "startVisible": true,
+        "startDisplay": "flex",
+        "panelClass": "panel start-panel",
+        "panelDisplay": "block",
+        "scenarioOptions": 9
+      }
+    },
+    {
+      "step": "round1_done",
+      "data": {
+        "session_id": "2dc488e8",
+        "status": {
+          "round": "1",
+          "intensity": "15%",
+          "distress": "12%",
+          "frequency": "15%",
+          "checkIntensity": "强度✓",
+          "checkFrequency": "频率✓",
+          "streak": "连续 0/3",
+          "remaining": "还差 3 轮",
+          "gap": "卡点：连续达标进行中，还需 3 轮",
+          "badge": "运行中"
+        }
+      }
+    },
+    {
+      "step": "round2_done",
+      "data": {
+        "round": "2",
+        "intensity": "15%",
+        "distress": "5%",
+        "frequency": "15%",
+        "checkIntensity": "强度✓",
+        "checkFrequency": "频率✓",
+        "streak": "连续 0/3",
+        "remaining": "还差 3 轮",
+        "gap": "卡点：连续达标进行中，还需 3 轮",
+        "badge": "运行中"
+      }
+    },
+    {
+      "step": "round3_done",
+      "data": {
+        "round": "3",
+        "intensity": "15%",
+        "distress": "0%",
+        "frequency": "15%",
+        "checkIntensity": "强度✓",
+        "checkFrequency": "频率✓",
+        "streak": "连续 1/3",
+        "remaining": "还差 2 轮",
+        "gap": "卡点：连续达标进行中，还需 2 轮",
+        "badge": "运行中"
+      }
+    },
+    {
+      "step": "round4_done",
+      "data": {
+        "round": "4",
+        "intensity": "15%",
+        "distress": "0%",
+        "frequency": "15%",
+        "checkIntensity": "强度✓",
+        "checkFrequency": "频率✓",
+        "streak": "连续 2/3",
+        "remaining": "还差 1 轮",
+        "gap": "卡点：连续达标进行中，还需 1 轮",
+        "badge": "运行中"
+      }
+    },
+    {
+      "step": "round5_autoend",
+      "data": {
+        "title": "🎉 调解成功",
+        "reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。",
+        "display": "flex",
+        "lastMessages": [
+          "刘洋 好像是有点好笑...",
+          "徐凯 这画得也太丑了吧,哈哈哈!",
+          "林小满 (小声)我...我没有...",
+          "🛑 实训结束"
+        ],
+        "interventionPromptVisible": false,
+        "status": {
+          "round": "5",
+          "streak": "连续 3/3",
+          "remaining": "已达结束条件",
+          "gap": "条件已满足，本会话将自动结束",
+          "frequency": "15%"
+        }
+      }
+    }
+  ],
+  "session_id": "2dc488e8",
+  "js_errors": []
+}

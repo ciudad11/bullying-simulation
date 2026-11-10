@@ -1,0 +1,33 @@
+{
+  "register": {
+    "status": 200,
+    "hasToken": true
+  },
+  "checks": {
+    "residual_present_before": true,
+    "cleared_on_new_session": true,
+    "sending_reset_clears_timer_and_label": true,
+    "second_residual_cleared": true
+  },
+  "before": {
+    "html": "\n            <div class=\"send-state-line title\">✅ 干预已发送</div>\n            <div class=\"send-state-meta\">发送时间 2026-11-09 21:00 · 评分 80/100 · 第 3 轮</div>\n            <div class=\"send-state-content\">残留的已发送干预话语：请温和而坚定地制止嘲笑</div>\n            \n            ",
+    "cls": "intervention-send-status sent",
+    "status": "sent"
+  },
+  "after_new_session": {
+    "html": "",
+    "cls": "intervention-send-status idle",
+    "status": "idle",
+    "token": null,
+    "content": "",
+    "btnLabel": "📤 发送干预"
+  },
+  "after_reset_sending": {
+    "html": "",
+    "status": "idle",
+    "timer": null,
+    "btnLabel": "📤 发送干预",
+    "btnSendingClass": false
+  },
+  "console_errors": []
+}

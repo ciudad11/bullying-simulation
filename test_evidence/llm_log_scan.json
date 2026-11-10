@@ -1,0 +1,20 @@
+{
+  "out": {
+    "lines": 382,
+    "mtime": "2026-11-09 19:42:58",
+    "Invalid port": 0,
+    "LLM暂时不可用": 0,
+    "API调用失败": 0,
+    "重试3次仍失败": 0,
+    "LLM raw lines": 12
+  },
+  "err": {
+    "lines": 4,
+    "mtime": "2026-11-09 19:32:21",
+    "Invalid port": 0,
+    "LLM暂时不可用": 0,
+    "API调用失败": 0,
+    "重试3次仍失败": 0,
+    "LLM raw lines": 0
+  }
+}

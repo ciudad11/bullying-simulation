@@ -1,0 +1,336 @@
+{
+  "p3_rounds": [
+    {
+      "stage": "created",
+      "round": 0,
+      "remaining_to_stop": 5,
+      "streak": 0,
+      "finished": false
+    },
+    {
+      "stage": "after_round_1",
+      "run_status": 200,
+      "run_done": false,
+      "run_round": 1,
+      "status_round": 1,
+      "remaining_to_stop": 4,
+      "run_metrics_remaining": 4,
+      "streak": 0,
+      "attack_frequency": 0.15,
+      "attack_frequency_max": 0.2,
+      "finished": false,
+      "result_type": "",
+      "termination_reason": ""
+    },
+    {
+      "stage": "after_round_2",
+      "run_status": 200,
+      "run_done": false,
+      "run_round": 2,
+      "status_round": 2,
+      "remaining_to_stop": 3,
+      "run_metrics_remaining": 3,
+      "streak": 0,
+      "attack_frequency": 0.15,
+      "attack_frequency_max": 0.2,
+      "finished": false,
+      "result_type": "",
+      "termination_reason": ""
+    },
+    {
+      "stage": "after_round_3",
+      "run_status": 200,
+      "run_done": false,
+      "run_round": 3,
+      "status_round": 3,
+      "remaining_to_stop": 2,
+      "run_metrics_remaining": 2,
+      "streak": 1,
+      "attack_frequency": 0.15,
+      "attack_frequency_max": 0.2,
+      "finished": false,
+      "result_type": "",
+      "termination_reason": ""
+    },
+    {
+      "stage": "after_round_4",
+      "run_status": 200,
+      "run_done": false,
+      "run_round": 4,
+      "status_round": 4,
+      "remaining_to_stop": 1,
+      "run_metrics_remaining": 1,
+      "streak": 2,
+      "attack_frequency": 0.15,
+      "attack_frequency_max": 0.2,
+      "finished": false,
+      "result_type": "",
+      "termination_reason": ""
+    },
+    {
+      "stage": "after_round_5",
+      "run_status": 200,
+      "run_done": true,
+      "run_round": 5,
+      "status_round": 5,
+      "remaining_to_stop": 0,
+      "run_metrics_remaining": 0,
+      "streak": 3,
+      "attack_frequency": 0.15,
+      "attack_frequency_max": 0.2,
+      "finished": true,
+      "result_type": "success",
+      "termination_reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。"
+    }
+  ],
+  "p2_invalid": [
+    {
+      "case": "ratio_negative",
+      "payload": {
+        "attack_frequency_max": -0.1
+      },
+      "code": 400,
+      "detail": "参数 attack_frequency_max 必须在 [0, 1] 范围内"
+    },
+    {
+      "case": "ratio_gt_1",
+      "payload": {
+        "attack_frequency_max": 1.5
+      },
+      "code": 400,
+      "detail": "参数 attack_frequency_max 必须在 [0, 1] 范围内"
+    },
+    {
+      "case": "rounds_zero",
+      "payload": {
+        "min_rounds": 0
+      },
+      "code": 400,
+      "detail": "参数 min_rounds 必须为 >=1 的整数"
+    },
+    {
+      "case": "rounds_float",
+      "payload": {
+        "min_rounds": 2.5
+      },
+      "code": 400,
+      "detail": "参数 min_rounds 必须为 >=1 的整数"
+    },
+    {
+      "case": "rounds_string",
+      "payload": {
+        "max_rounds": "abc"
+      },
+      "code": 400,
+      "detail": "could not convert string to float: 'abc'"
+    },
+    {
+      "case": "rounds_null",
+      "payload": {
+        "bullying_stopped_rounds": null
+      },
+      "code": 400,
+      "detail": "参数 bullying_stopped_rounds 必须为数值"
+    },
+    {
+      "case": "ratio_bool",
+      "payload": {
+        "victim_safety_min": true
+      },
+      "code": 400,
+      "detail": "参数 victim_safety_min 必须为数值"
+    },
+    {
+      "case": "batch_valid_then_invalid",
+      "payload": {
+        "attack_frequency_max": 0.1,
+        "min_rounds": 0
+      },
+      "code": 400,
+      "detail": "参数 min_rounds 必须为 >=1 的整数"
+    },
+    {
+      "case": "ratio_nan",
+      "payload": "NaN",
+      "code": 400,
+      "detail": "{\"detail\":\"参数 attack_frequency_max 必须为有限数值\"}"
+    }
+  ],
+  "account": {
+    "username": "qa_r2fix_1109a",
+    "created": true
+  },
+  "scenario": {
+    "id": "scenario_1",
+    "title": "美术课上的嘲笑"
+  },
+  "p1_session": {
+    "session_id": "69eac8f2",
+    "db_session_id": "s_53e100e40eb4c6dda9626145",
+    "level": 1,
+    "use_llm": false
+  },
+  "end_round": 5,
+  "end_reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。",
+  "end_result_type": "success",
+  "p1_db_after_autostop": {
+    "session_row": {
+      "id": "s_53e100e40eb4c6dda9626145",
+      "status": "completed",
+      "result_type": "success",
+      "auto_end_reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。",
+      "completed_at": "2026-11-09 18:43:30"
+    },
+    "report_row_count": 1
+  },
+  "p1_snapshot": {
+    "report_id": "r_4c59cd76b3ead319",
+    "metrics_round": 5,
+    "finished": true,
+    "result_type": "success",
+    "termination_reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。",
+    "message_rounds": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "message_count": 17,
+    "total_rounds": 5
+  },
+  "p1_snapshot_checks": {
+    "round_eq_5": true,
+    "finished_true": true,
+    "result_type_success": true,
+    "reason_nonempty": true,
+    "messages_cover_1_to_5": false,
+    "single_report_row": true,
+    "messages_cover_1_to_5_subset": true,
+    "note_round0": "round 0 为场景说明消息；1..5 轮均覆盖"
+  },
+  "p1_report_api_calls": [
+    {
+      "call": 1,
+      "code": 200,
+      "report_id_before": "r_4c59cd76b3ead319",
+      "metrics": {
+        "round": 5,
+        "finished": true,
+        "result_type": "success",
+        "termination_reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。"
+      },
+      "messages_len": 17,
+      "total_rounds": 5
+    },
+    {
+      "call": 2,
+      "code": 200,
+      "report_id_before": "r_4c59cd76b3ead319",
+      "metrics": {
+        "round": 5,
+        "finished": true,
+        "result_type": "success",
+        "termination_reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。"
+      },
+      "messages_len": 17,
+      "total_rounds": 5
+    }
+  ],
+  "p1_after_two_report_calls": {
+    "report_row_count": 1,
+    "same_report_id": true,
+    "created_at": "2026-11-09 18:43:32",
+    "metrics_round": 5,
+    "metrics_finished": true,
+    "metrics_result_type": "success",
+    "metrics_reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。"
+  },
+  "p2_session": {
+    "session_id": "1f61d2cf",
+    "db_session_id": "s_c46b4db491e247c726f05624"
+  },
+  "p2_config_before": {
+    "config": {
+      "bullying_stopped_rounds": 3,
+      "intervention_effective_rounds": 4,
+      "victim_crisis_threshold": 0.95,
+      "victim_crisis_rounds": 3,
+      "max_rounds": 40,
+      "min_rounds": 3
+    },
+    "convergence": {
+      "bullying_intensity_max": 0.2,
+      "attack_frequency_max": 0.2,
+      "victim_safety_min": 0.7,
+      "retaliation_risk_max": 0.3,
+      "follow_up_status_min": 0.5,
+      "partial_round_min": 10,
+      "partial_intensity_max": 0.3
+    }
+  },
+  "p2_config_after_invalid": {
+    "config": {
+      "bullying_stopped_rounds": 3,
+      "intervention_effective_rounds": 4,
+      "victim_crisis_threshold": 0.95,
+      "victim_crisis_rounds": 3,
+      "max_rounds": 40,
+      "min_rounds": 3
+    },
+    "convergence": {
+      "bullying_intensity_max": 0.2,
+      "attack_frequency_max": 0.2,
+      "victim_safety_min": 0.7,
+      "retaliation_risk_max": 0.3,
+      "follow_up_status_min": 0.5,
+      "partial_round_min": 10,
+      "partial_intensity_max": 0.3
+    }
+  },
+  "p2_config_unchanged": true,
+  "p2_run_after_invalid": {
+    "code": 200,
+    "body_ok": true,
+    "round": 1,
+    "done": false,
+    "detail": null
+  },
+  "p2_legal": {
+    "code": 200,
+    "body": {
+      "success": true,
+      "config": {
+        "bullying_stopped_rounds": 3,
+        "intervention_effective_rounds": 4,
+        "victim_crisis_threshold": 0.95,
+        "victim_crisis_rounds": 3,
+        "max_rounds": 40,
+        "min_rounds": 3
+      },
+      "convergence": {
+        "bullying_intensity_max": 0.2,
+        "attack_frequency_max": 0.1,
+        "victim_safety_min": 0.7,
+        "retaliation_risk_max": 0.3,
+        "follow_up_status_min": 0.5,
+        "partial_round_min": 10,
+        "partial_intensity_max": 0.3
+      },
+      "applied": {
+        "attack_frequency_max": 0.1
+      }
+    }
+  },
+  "p2_legal_effective": {
+    "status_attack_frequency_max": 0.1,
+    "expected": 0.1,
+    "match": true
+  },
+  "p2_run_after_legal": {
+    "code": 200,
+    "done": false,
+    "round": 2
+  }
+}

@@ -1,0 +1,182 @@
+# ============================================================
+# 校园话语霸凌与教师干预实训系统 - 评估器配置文件
+# ============================================================
+# 此文件包含所有可调整的参数，无需修改代码即可调整系统行为
+# 建议修改后重启服务器生效
+
+# ============ 受害者压力累积 ============
+victim_distress:
+  sad_emotion: 0.12          # 悲伤情绪每次+压力（会被emotional_feedback_scale缩放）
+  fearful_emotion: 0.18      # 恐惧情绪每次+压力（会被emotional_feedback_scale缩放）
+  supportive_comfort: 0.15   # 受害者得到安慰-压力
+  self_doubt: 0.22           # 自我否定每次+压力（会被emotional_feedback_scale缩放）
+  
+  # --- 霸凌→压力耦合机制 ---
+  bully_attack_distress_rate: 0.04   # 霸凌者攻击→受害者压力增加系数（因果链核心）
+  emotional_feedback_scale: 0.3      # 受害者情绪自反馈缩放因子（0.3=缩减70%，情绪是结果不是原因）
+  distress_bullying_coupling: 0.3    # 霸凌强度下降→压力跟随下降的耦合系数
+  distress_decay_rate: 0.10          # 霸凌极低时每轮自然减压量
+  distress_decay_threshold: 0.3      # 霸凌强度低于此值才触发自然减压（近乎停止）
+  intervention_relief_rate: 0.08     # 有效干预后额外减压量
+
+# ============ 霸凌强度累积 ============
+bullying_intensity:
+  hostile_threshold: 0.3      # 敌意消息阈值（超过此值才计入霸凌）
+  increase_rate: 0.15        # 每次攻击+霸凌强度
+
+# ============ 干预减压机制 ============
+# 说明：旧版关键词关怀评分已废弃，现由专家评分 D2 维度推导 victim_care_score
+# （见 src/multi_agent/evaluator_node.py），以下参数仅保留兼容，不再参与打分。
+intervention_relief:
+  # 关怀度计算权重
+  care_keywords_weight: 0.15       # 关怀基础关键词权重（每个+分数）
+  repair_keywords_weight: 0.25     # 心理修复关键词权重（每个+更高分数）
+  care_score_cap: 1.0              # 关怀度上限
+  
+  # 减压机制
+  distress_reduction_rate: 0.5      # 关怀度→减压系数（减压幅度 = 关怀度 × 此值）
+  trigger_threshold: 0.15           # 触发阈值（关怀度>此值才触发减压）
+  high_care_threshold: 0.5          # 高关怀阈值（触发"恢复信心"反馈）
+  
+  # 压力警告阈值
+  high_distress_alert: 0.6         # 压力>此值且无关怀→警告
+  severe_distress_alert: 0.8       # 压力>此值且关怀不足→严重警告
+
+# ============ 旁观者仗义支持（A型）============
+bystander_a:
+  supportive_threshold: 0.2        # 支持度阈值（超过才计入）
+  victim_distress_reduction: 0.35  # 减压系数（降低受害者压力）
+  bystander_score_gain: 0.3        # 旁观者评分增加
+
+# ============ 旁观者从众支持（B型）===========
+bystander_b:
+  supportive_threshold: 0.3
+  victim_distress_reduction: 0.1   # 减压系数（较小）
+  bystander_score_gain: 0.3
+  supportive_threshold_for_distress: 0.4  # 降低压力的更高阈值
+
+# ============ 霸凌停止后自然恢复 ============
+natural_recovery:
+  bully_stopped_threshold: 0.1     # 霸凌强度<此值认为已停止
+  recovery_per_round: 0.08        # 每轮自然恢复8%
+
+# ============ 评估器基础参数 ============
+evaluation:
+  quality_score_min: 0            # 最低分（百分制）
+  quality_score_max: 100          # 最高分（百分制）
+  action_length_threshold: 10      # 旧版长度阈值（已废弃，由专家评分替代）
+  positive_bonus_max: 30           # 旧版积极信号加分上限（已废弃）
+  positive_bonus_per_signal: 10    # 旧版每个积极信号加分（已废弃）
+  negative_penalty_per_signal: 5   # 旧版每个消极信号扣分（已废弃）
+
+# ============ 评估反馈关键词映射 ============
+feedback_keywords:
+  victim_focus: "关注被霸凌者感受"
+  empathy: "引导换位思考"
+  reflection: "引导反省"
+  rules: "建立规则意识"
+  support: "传递支持"
+  gentle_stop: "温和制止"
+  victim_care: "受害者心理关怀"
+  behavior_identify: "准确识别霸凌行为"
+  high_distress_warning: "受害者压力高，建议优先关注受害者情感"
+  severe_distress_warning: "受害者心理创伤严重，急需心理修复干预！"
+  suppression_warning: "压制问题可能让受害者更无助"
+  labeling_warning: "标签化可能产生负面影响"
+  restoration_feedback: "受害者心理状态有所恢复"
+  confidence_feedback: "充分心理关怀，受害者开始恢复信心"
+
+# ============================================================
+# 规则引擎参数（R10：全部参数化，禁止在代码中硬编码）
+# ------------------------------------------------------------
+# 全部为「工程初始值 / 待校准」，不代表实证因果系数；调参需按方案 §14.8 顺序
+# （先修一致性 → 合成情境 → 独立标注 → 独立结果校准）。
+# fin_ver 与 noreset 两入口的本文件必须保持一致（仅允许入口相关差异）。
+# ============================================================
+
+# --- 单轮状态变化上限（StateTransitionEngine，分上升/下降方向）---
+state_transition:
+  bullying_intensity:      {up: 0.30, down: 0.30}
+  victim_distress:         {up: 0.12, down: 0.50}
+  bystander_intervention:  {up: 0.30, down: 0.30}
+  attack_frequency:        {up: 0.20, down: 0.20}
+  attack_severity:         {up: 0.20, down: 0.20}
+  persistence:             {up: 0.15, down: 0.15}
+  power_imbalance:         {up: 0.10, down: 0.10}
+  victim_safety:           {up: 0.15, down: 0.15}
+  bully_resistance:         {up: 0.15, down: 0.15}
+  bystander_support:       {up: 0.15, down: 0.15}
+  retaliation_risk:        {up: 0.15, down: 0.15}
+  follow_up_status:        {up: 0.50, down: 0.50}
+
+# --- 分维度作用上限（dimension_effect：delta = max_delta × K_eff）---
+dimension_effect:
+  D1:
+    attack_frequency: -0.08
+    attack_severity: -0.05
+  D2:
+    victim_safety: 0.08
+    victim_distress: -0.05
+  D3:
+    bully_resistance: -0.04
+    persistence: -0.04
+  D5:
+    bystander_support: 0.03
+
+# --- 专项风险状态转移（risk_rules；仅列可覆盖的状态增量）---
+risk_rules:
+  R_VICTIM_BLAME:
+    victim_distress: 0.05
+    victim_safety: -0.05
+    retaliation_risk: 0.05
+  R_MINIMIZE_HARM: {}
+  R_FORCED_CONFRONTATION:
+    retaliation_risk: 0.06
+    victim_safety: -0.05
+  R_EXPOSURE_RETALIATION:
+    retaliation_risk: 0.08
+    victim_distress: 0.05
+    victim_safety: -0.05
+  R_PROMISE_NO_ACTION:
+    retaliation_risk: 0.03
+
+# --- Agent 决策参数（agent_decision）---
+agent_decision:
+  base: 0.10
+  w_attack_frequency: 0.30
+  w_persistence: 0.25
+  w_bully_resistance: 0.20
+  w_power_imbalance: 0.15
+  w_retaliation_risk: 0.15
+  w_stop_residual: 0.25
+  w_accountability: 0.15
+  w_bystander_support: 0.10
+  clip_min: 0.05
+  clip_max: 0.95
+  good_intervention_min: 0.50
+  bad_intervention_max: 0.20
+
+# --- 收敛判定（convergence）---
+convergence:
+  bullying_intensity_max: 0.20
+  attack_frequency_max: 0.20
+  victim_safety_min: 0.70
+  retaliation_risk_max: 0.30
+  follow_up_status_min: 0.50
+  partial_round_min: 10
+  partial_intensity_max: 0.30
+
+# --- 干预残余效应衰减（residual_decay：每完整轮无新增证据时的保留比例）---
+residual_decay:
+  immediate_stop: 0.55
+  support: 0.80
+  norm: 0.90
+
+# --- 用户指导触发门槛（guidance）---
+# hint_min_rounds：连续低于阈值的轮数达到该值后，开始展示「针对性指导」
+#   （只给策略方向，不给可照抄话术；避免一开始就给提示，也避免迟迟不出现）。
+# alert_min_rounds：连续低于阈值的轮数达到该值后，额外展示醒目预警横幅。
+# 说明：待评估（pending）不计入也不清零连续计数；仅「已评分且达标」才清零。
+guidance:
+  hint_min_rounds: 2
+  alert_min_rounds: 3

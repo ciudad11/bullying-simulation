@@ -1,0 +1,86 @@
+{
+  "pairs": [
+    {
+      "left": "fin_ver/.env",
+      "right": "noreset/.env",
+      "left_keys": [
+        "DEEPSEEK_API_KEY",
+        "USE_LLM_FOR_SIMULATION",
+        "NO_PROXY"
+      ],
+      "right_keys": [
+        "DEEPSEEK_API_KEY",
+        "USE_LLM_FOR_SIMULATION"
+      ],
+      "non_proxy_lines_equal": true,
+      "non_proxy_left": [
+        {
+          "key": "DEEPSEEK_API_KEY",
+          "sha256": "fe7d56a894b23eb8339b929cb4f183ba3f2c21bbe3deab9eacf057762a466bed",
+          "len": 35
+        },
+        {
+          "key": "USE_LLM_FOR_SIMULATION",
+          "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+          "len": 4
+        }
+      ],
+      "non_proxy_right": [
+        {
+          "key": "DEEPSEEK_API_KEY",
+          "sha256": "fe7d56a894b23eb8339b929cb4f183ba3f2c21bbe3deab9eacf057762a466bed",
+          "len": 35
+        },
+        {
+          "key": "USE_LLM_FOR_SIMULATION",
+          "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b",
+          "len": 4
+        }
+      ],
+      "left_only_keys": [
+        "NO_PROXY"
+      ],
+      "right_only_keys": [],
+      "left_no_proxy_values": [
+        null
+      ]
+    },
+    {
+      "left": "fin_ver/web/.env",
+      "right": "noreset/web/.env",
+      "left_keys": [
+        "MINIMAX_API_KEY"
+      ],
+      "right_keys": [
+        "MINIMAX_API_KEY"
+      ],
+      "non_proxy_lines_equal": true,
+      "non_proxy_left": [
+        {
+          "key": "MINIMAX_API_KEY",
+          "sha256": "62ca93da2f2722555fc70b55723da566912c3a63a7043c6a16e5fca015482b0e",
+          "len": 25
+        }
+      ],
+      "non_proxy_right": [
+        {
+          "key": "MINIMAX_API_KEY",
+          "sha256": "62ca93da2f2722555fc70b55723da566912c3a63a7043c6a16e5fca015482b0e",
+          "len": 25
+        }
+      ],
+      "left_only_keys": [],
+      "right_only_keys": [],
+      "left_no_proxy_values": []
+    }
+  ],
+  "mtimes": {
+    "fin_ver/.env": 1794223776.3029177,
+    "noreset/.env": 1785997955.32154,
+    "fin_ver/web/.env": 1783933692.0,
+    "noreset/web/.env": 1783933692.0
+  },
+  "fin_no_proxy_present": true,
+  "fin_has_bracket_ipv6": true,
+  "fin_no_proxy_value": "localhost,.localhost,127.0.0.1,127.0.0.0/8,::1"
+}

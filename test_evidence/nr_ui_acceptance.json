@@ -1,0 +1,366 @@
+{
+  "steps": [
+    {
+      "step": "logged_in",
+      "data": {
+        "user": "qa_nr_1109a"
+      }
+    },
+    {
+      "step": "setup",
+      "data": {
+        "scenario": "scenario_1",
+        "level1": true,
+        "useLlm": false,
+        "startVisible": true
+      }
+    },
+    {
+      "step": "round1",
+      "data": {
+        "round": 1,
+        "ui": {
+          "round": "1",
+          "frequency": "15%",
+          "checkIntensity": "强度✓",
+          "checkFrequency": "频率✓",
+          "streak": "连续 0/3",
+          "remaining": "距结束还需 4 轮",
+          "gap": "卡点：连续达标进行中，还需 4 轮",
+          "badge": "运行中"
+        },
+        "api": {
+          "round": 1,
+          "remaining_to_stop": 4,
+          "bullying_stopped_rounds": 0,
+          "attack_frequency": 0.15,
+          "attack_frequency_max": 0.2,
+          "finished": false,
+          "result_type": "",
+          "termination_reason": ""
+        },
+        "ui_remaining_num": 4
+      }
+    },
+    {
+      "step": "round2",
+      "data": {
+        "round": 2,
+        "ui": {
+          "round": "2",
+          "frequency": "15%",
+          "checkIntensity": "强度✓",
+          "checkFrequency": "频率✓",
+          "streak": "连续 0/3",
+          "remaining": "距结束还需 3 轮",
+          "gap": "卡点：连续达标进行中，还需 3 轮",
+          "badge": "运行中"
+        },
+        "api": {
+          "round": 2,
+          "remaining_to_stop": 3,
+          "bullying_stopped_rounds": 0,
+          "attack_frequency": 0.15,
+          "attack_frequency_max": 0.2,
+          "finished": false,
+          "result_type": "",
+          "termination_reason": ""
+        },
+        "ui_remaining_num": 3
+      }
+    },
+    {
+      "step": "round3",
+      "data": {
+        "round": 3,
+        "ui": {
+          "round": "3",
+          "frequency": "15%",
+          "checkIntensity": "强度✓",
+          "checkFrequency": "频率✓",
+          "streak": "连续 1/3",
+          "remaining": "距结束还需 2 轮",
+          "gap": "卡点：连续达标进行中，还需 2 轮",
+          "badge": "运行中"
+        },
+        "api": {
+          "round": 3,
+          "remaining_to_stop": 2,
+          "bullying_stopped_rounds": 1,
+          "attack_frequency": 0.15,
+          "attack_frequency_max": 0.2,
+          "finished": false,
+          "result_type": "",
+          "termination_reason": ""
+        },
+        "ui_remaining_num": 2
+      }
+    },
+    {
+      "step": "round4",
+      "data": {
+        "round": 4,
+        "ui": {
+          "round": "4",
+          "frequency": "15%",
+          "checkIntensity": "强度✓",
+          "checkFrequency": "频率✓",
+          "streak": "连续 2/3",
+          "remaining": "距结束还需 1 轮",
+          "gap": "卡点：连续达标进行中，还需 1 轮",
+          "badge": "运行中"
+        },
+        "api": {
+          "round": 4,
+          "remaining_to_stop": 1,
+          "bullying_stopped_rounds": 2,
+          "attack_frequency": 0.15,
+          "attack_frequency_max": 0.2,
+          "finished": false,
+          "result_type": "",
+          "termination_reason": ""
+        },
+        "ui_remaining_num": 1
+      }
+    },
+    {
+      "step": "round5_autoend",
+      "data": {
+        "ui": {
+          "title": "🎉 调解成功",
+          "reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。",
+          "display": "flex",
+          "lastMessages": [
+            "刘洋 好像是有点好笑...",
+            "徐凯 切,有什么了不起的。",
+            "林小满 (低着头不说话)",
+            "🛑 实训结束"
+          ],
+          "interventionPromptVisible": false,
+          "ui": {
+            "round": "5",
+            "streak": "连续 3/3",
+            "remaining": "已达结束条件",
+            "gap": "条件已满足，本会话将自动结束",
+            "frequency": "15%"
+          },
+          "badge": "已结束"
+        },
+        "api": {
+          "round": 5,
+          "remaining_to_stop": 0,
+          "bullying_stopped_rounds": 3,
+          "attack_frequency": 0.15,
+          "attack_frequency_max": 0.2,
+          "finished": true,
+          "result_type": "success",
+          "termination_reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。"
+        }
+      }
+    }
+  ],
+  "remaining": [
+    {
+      "round": 1,
+      "ui": {
+        "round": "1",
+        "frequency": "15%",
+        "checkIntensity": "强度✓",
+        "checkFrequency": "频率✓",
+        "streak": "连续 0/3",
+        "remaining": "距结束还需 4 轮",
+        "gap": "卡点：连续达标进行中，还需 4 轮",
+        "badge": "运行中"
+      },
+      "api": {
+        "round": 1,
+        "remaining_to_stop": 4,
+        "bullying_stopped_rounds": 0,
+        "attack_frequency": 0.15,
+        "attack_frequency_max": 0.2,
+        "finished": false,
+        "result_type": "",
+        "termination_reason": ""
+      },
+      "ui_remaining_num": 4
+    },
+    {
+      "round": 2,
+      "ui": {
+        "round": "2",
+        "frequency": "15%",
+        "checkIntensity": "强度✓",
+        "checkFrequency": "频率✓",
+        "streak": "连续 0/3",
+        "remaining": "距结束还需 3 轮",
+        "gap": "卡点：连续达标进行中，还需 3 轮",
+        "badge": "运行中"
+      },
+      "api": {
+        "round": 2,
+        "remaining_to_stop": 3,
+        "bullying_stopped_rounds": 0,
+        "attack_frequency": 0.15,
+        "attack_frequency_max": 0.2,
+        "finished": false,
+        "result_type": "",
+        "termination_reason": ""
+      },
+      "ui_remaining_num": 3
+    },
+    {
+      "round": 3,
+      "ui": {
+        "round": "3",
+        "frequency": "15%",
+        "checkIntensity": "强度✓",
+        "checkFrequency": "频率✓",
+        "streak": "连续 1/3",
+        "remaining": "距结束还需 2 轮",
+        "gap": "卡点：连续达标进行中，还需 2 轮",
+        "badge": "运行中"
+      },
+      "api": {
+        "round": 3,
+        "remaining_to_stop": 2,
+        "bullying_stopped_rounds": 1,
+        "attack_frequency": 0.15,
+        "attack_frequency_max": 0.2,
+        "finished": false,
+        "result_type": "",
+        "termination_reason": ""
+      },
+      "ui_remaining_num": 2
+    },
+    {
+      "round": 4,
+      "ui": {
+        "round": "4",
+        "frequency": "15%",
+        "checkIntensity": "强度✓",
+        "checkFrequency": "频率✓",
+        "streak": "连续 2/3",
+        "remaining": "距结束还需 1 轮",
+        "gap": "卡点：连续达标进行中，还需 1 轮",
+        "badge": "运行中"
+      },
+      "api": {
+        "round": 4,
+        "remaining_to_stop": 1,
+        "bullying_stopped_rounds": 2,
+        "attack_frequency": 0.15,
+        "attack_frequency_max": 0.2,
+        "finished": false,
+        "result_type": "",
+        "termination_reason": ""
+      },
+      "ui_remaining_num": 1
+    },
+    {
+      "round": 5,
+      "ui": {
+        "round": "5",
+        "streak": "连续 3/3",
+        "remaining": "已达结束条件",
+        "gap": "条件已满足，本会话将自动结束",
+        "frequency": "15%"
+      },
+      "api": {
+        "round": 5,
+        "remaining_to_stop": 0,
+        "bullying_stopped_rounds": 3,
+        "attack_frequency": 0.15,
+        "attack_frequency_max": 0.2,
+        "finished": true,
+        "result_type": "success",
+        "termination_reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。"
+      },
+      "ui_remaining_num": 0
+    }
+  ],
+  "account": "qa_nr_1109a",
+  "session_id": "3940bd64",
+  "round5": {
+    "ui": {
+      "title": "🎉 调解成功",
+      "reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。",
+      "display": "flex",
+      "lastMessages": [
+        "刘洋 好像是有点好笑...",
+        "徐凯 切,有什么了不起的。",
+        "林小满 (低着头不说话)",
+        "🛑 实训结束"
+      ],
+      "interventionPromptVisible": false,
+      "ui": {
+        "round": "5",
+        "streak": "连续 3/3",
+        "remaining": "已达结束条件",
+        "gap": "条件已满足，本会话将自动结束",
+        "frequency": "15%"
+      },
+      "badge": "已结束"
+    },
+    "api": {
+      "round": 5,
+      "remaining_to_stop": 0,
+      "bullying_stopped_rounds": 3,
+      "attack_frequency": 0.15,
+      "attack_frequency_max": 0.2,
+      "finished": true,
+      "result_type": "success",
+      "termination_reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。"
+    }
+  },
+  "js_errors": null,
+  "db_session_api": {
+    "id": "s_58c62a4516556992acd76138",
+    "user_id": "u_39b7a9785dd954a7",
+    "level": 1,
+    "scenario_id": "scenario_1",
+    "scenario_title": "",
+    "status": "completed",
+    "result_type": "success",
+    "auto_end_reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。",
+    "created_at": "2026-11-09 20:14:30",
+    "completed_at": "2026-11-09 20:14:55",
+    "has_report": true,
+    "report_summary": ""
+  },
+  "db_session_id": "s_58c62a4516556992acd76138",
+  "db_session_row": {
+    "id": "s_58c62a4516556992acd76138",
+    "status": "completed",
+    "result_type": "success",
+    "auto_end_reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。",
+    "completed_at": "2026-11-09 20:14:55"
+  },
+  "report_row_count": 1,
+  "report_snapshot": {
+    "report_id": "r_0441027a336ead9b",
+    "metrics_round": 5,
+    "finished": true,
+    "result_type": "success",
+    "termination_reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。",
+    "message_rounds": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "total_rounds": 5
+  },
+  "checks": {
+    "ui_remaining_4_to_0": true,
+    "api_remaining_4_to_0": true,
+    "modal_success_text": true,
+    "final_dialogue_present": true,
+    "no_extra_prompt": true,
+    "db_completed_success": true,
+    "report_single_row": true,
+    "report_round5_finished": true,
+    "report_messages_1_to_5": true
+  }
+}

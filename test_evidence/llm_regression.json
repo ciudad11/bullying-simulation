@@ -1,0 +1,78 @@
+{
+  "rounds": [
+    {
+      "round": 1,
+      "code": 200,
+      "done": false,
+      "remaining": 4,
+      "streak": 0,
+      "finished": false,
+      "result_type": ""
+    },
+    {
+      "round": 2,
+      "code": 200,
+      "done": false,
+      "remaining": 3,
+      "streak": 0,
+      "finished": false,
+      "result_type": ""
+    },
+    {
+      "round": 3,
+      "code": 200,
+      "done": false,
+      "remaining": 2,
+      "streak": 1,
+      "finished": false,
+      "result_type": ""
+    },
+    {
+      "round": 4,
+      "code": 200,
+      "done": false,
+      "remaining": 1,
+      "streak": 2,
+      "finished": false,
+      "result_type": ""
+    },
+    {
+      "round": 5,
+      "code": 200,
+      "done": true,
+      "remaining": 0,
+      "streak": 3,
+      "finished": true,
+      "result_type": "success"
+    }
+  ],
+  "termination_exit": 0,
+  "termination_summary": "=== 自动停止规则测试：15 通过 / 0 失败 ===",
+  "termination_pass": true,
+  "account": "qa_llmoff_1109a",
+  "session": {
+    "session_id": "bd4cbe72",
+    "db_session_id": "s_e1032c3bb6eae70d70f74ab5",
+    "use_llm": false,
+    "level": 1,
+    "llm_available": true
+  },
+  "end_round": 5,
+  "end_result_type": "success",
+  "end_reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。",
+  "db_session": {
+    "id": "s_e1032c3bb6eae70d70f74ab5",
+    "status": "completed",
+    "result_type": "success",
+    "auto_end_reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。",
+    "completed_at": "2026-11-09 19:42:58"
+  },
+  "checks": {
+    "termination_15_pass": true,
+    "llm_off_runs_no_error": true,
+    "auto_end_round_5": true,
+    "result_type_success": true,
+    "remaining_sequence_5_to_0": true,
+    "db_completed_success": true
+  }
+}

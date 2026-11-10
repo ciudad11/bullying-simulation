@@ -1,0 +1,20 @@
+{
+  "interventions": [
+    {
+      "id": "custom_3496c514",
+      "title": "🧪 测试干预",
+      "content": "这是一个测试干预内容",
+      "category": "测试",
+      "tags": [
+        "测试"
+      ]
+    },
+    {
+      "id": "custom_44e11d88",
+      "title": "温和制止",
+      "content": "你这样说的不对",
+      "category": "自定义",
+      "tags": []
+    }
+  ]
+}

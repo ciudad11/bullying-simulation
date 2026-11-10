@@ -1,0 +1,74 @@
+{
+  "checks": {
+    "page_ready": true,
+    "api_stubbed": true,
+    "helpers_defined": true,
+    "success_clean": {
+      "icon": "✅",
+      "title": "🎉 调解成功",
+      "subtitle": "恭喜！您有效制止了欺凌行为，保护了受害者",
+      "reason": "🎉 恭喜您有效制止了欺凌行为，保护了受害者！",
+      "active": true,
+      "whiteSpace": "pre-line"
+    },
+    "success_with_reminder": {
+      "icon": "✅",
+      "title": "🎉 调解成功",
+      "subtitle": "恭喜！您有效制止了欺凌行为，保护了受害者",
+      "reason": "🎉 恭喜您有效制止了欺凌行为，保护了受害者！\n温馨提示：欺凌强度持续下降",
+      "active": true,
+      "whiteSpace": "pre-line"
+    },
+    "failure": {
+      "icon": "💪",
+      "title": "💪 调解未成功",
+      "subtitle": "别灰心，每次尝试都是宝贵的经验",
+      "reason": "建议复盘干预时机与方式，调整策略后再试一次！\n事实原因：干预未达阈值，欺凌仍未停止",
+      "active": true,
+      "whiteSpace": "pre-line"
+    },
+    "timeout": {
+      "icon": "⏰",
+      "title": "⏰ 本轮模拟结束",
+      "subtitle": "对话轮次已达上限",
+      "reason": "报告将基于已有数据生成分析，欢迎调整策略再试一次！",
+      "active": true,
+      "whiteSpace": "pre-line"
+    },
+    "unknown_fallback": {
+      "icon": "🏁",
+      "title": "📋 模拟结束",
+      "subtitle": "模拟已达成终止条件",
+      "reason": "其它终止原因",
+      "active": true,
+      "whiteSpace": "pre-line"
+    },
+    "user_stop_branch": {
+      "icon": "📋",
+      "title": "📋 实训已结束",
+      "subtitle": "您已主动结束本次模拟",
+      "reason": "报告将基于已有对话与干预数据生成分析，供您复盘参考。",
+      "active": true,
+      "whiteSpace": "pre-line"
+    },
+    "stop_button_flow": {
+      "first": {
+        "icon": "📋",
+        "title": "📋 实训已结束",
+        "subtitle": "您已主动结束本次模拟",
+        "reason": "报告将基于已有对话与干预数据生成分析，供您复盘参考。",
+        "active": true,
+        "endMessages": 1
+      },
+      "second": {
+        "endMessages": 1,
+        "active": true
+      }
+    },
+    "no_stack": {
+      "convergenceDisplay": "none",
+      "autoendActive": true
+    }
+  },
+  "console": []
+}

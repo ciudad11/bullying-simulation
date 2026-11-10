@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台 - 校园话语霸凌实训系统</title>
+    <link rel="stylesheet" href="/css/admin.css?v=2026102801">
+</head>
+<body>
+<div class="admin-container">
+    <!-- 头部 -->
+    <header class="admin-header">
+        <div class="header-left">
+            <h1>📊 管理后台</h1>
+            <span class="header-sub">校园话语霸凌与教师干预实训系统</span>
+        </div>
+        <div class="header-right">
+            <span class="admin-user" id="admin-user">管理员</span>
+            <a href="/" class="btn-back">← 返回系统</a>
+            <button class="btn-logout" id="btn-logout">退出</button>
+        </div>
+    </header>
+
+    <!-- 统计卡片 -->
+    <section class="stats-grid" id="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon">👥</div>
+            <div class="stat-info">
+                <div class="stat-value" id="stat-users">-</div>
+                <div class="stat-label">总用户数</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">📝</div>
+            <div class="stat-info">
+                <div class="stat-value" id="stat-sessions">-</div>
+                <div class="stat-label">总会话数</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">📄</div>
+            <div class="stat-info">
+                <div class="stat-value" id="stat-reports">-</div>
+                <div class="stat-label">总报告数</div>
+            </div>
+        </div>
+        <div class="stat-card highlight">
+            <div class="stat-icon">🔥</div>
+            <div class="stat-info">
+                <div class="stat-value" id="stat-today-users">-</div>
+                <div class="stat-label">今日活跃用户</div>
+            </div>
+        </div>
+        <div class="stat-card highlight">
+            <div class="stat-icon">⚡</div>
+            <div class="stat-info">
+                <div class="stat-value" id="stat-today-sessions">-</div>
+                <div class="stat-label">今日会话数</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tab 切换 -->
+    <div class="tab-bar">
+        <button class="tab-btn active" data-tab="sessions">📋 会话记录</button>
+        <button class="tab-btn" data-tab="users">👥 用户管理</button>
+    </div>
+
+    <!-- 会话列表 -->
+    <section class="tab-content active" id="tab-sessions">
+        <div class="table-toolbar">
+            <input type="text" class="search-input" id="search-sessions" placeholder="搜索用户名或场景...">
+            <button class="btn-sm btn-sm-danger" onclick="batchCleanupSessions()" style="margin-left:8px;white-space:nowrap;">🗑️ 批量清理abandoned</button>
+            <div class="pager" id="sessions-pager"></div>
+        </div>
+        <div class="table-wrap">
+            <table class="data-table" id="sessions-table">
+                <thead>
+                    <tr>
+                        <th>用户</th>
+                        <th>场景</th>
+                        <th>级别</th>
+                        <th>状态</th>
+                        <th>报告</th>
+                        <th>时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="sessions-tbody">
+                    <tr><td colspan="7" class="empty-hint">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- 用户列表 -->
+    <section class="tab-content" id="tab-users">
+        <div class="table-wrap">
+            <table class="data-table" id="users-table">
+                <thead>
+                    <tr>
+                        <th>用户名</th>
+                        <th>显示名</th>
+                        <th>邮箱</th>
+                        <th>角色</th>
+                        <th>会话数</th>
+                        <th>注册时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="users-tbody">
+                    <tr><td colspan="7" class="empty-hint">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+<!-- 用户详情弹窗 -->
+<div class="modal-overlay hidden" id="user-detail-modal">
+    <div class="modal-content modal-lg">
+        <div class="modal-header">
+            <h2 id="modal-title">用户详情</h2>
+            <button class="modal-close" id="modal-close">✕</button>
+        </div>
+        <div class="modal-body" id="user-detail-body">
+            <p class="empty-hint">加载中...</p>
+        </div>
+    </div>
+</div>
+
+<!-- 会话日志弹窗 -->
+<div class="modal-overlay hidden" id="log-modal">
+    <div class="modal-content modal-lg">
+        <div class="modal-header">
+            <h2>会话日志</h2>
+            <button class="modal-close" id="log-modal-close">✕</button>
+        </div>
+        <div class="modal-body log-body" id="log-body">
+            <p class="empty-hint">加载中...</p>
+        </div>
+    </div>
+</div>
+
+<script src="/js/admin.js?v=2026102801"></script>
+</body>
+</html>

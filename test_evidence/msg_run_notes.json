@@ -1,0 +1,229 @@
+{
+  "task": "#23 结束弹窗文案真实交互验收",
+  "method": "Edge headless + CDP (--remote-allow-origins=*)；5000 用 9333，5001 用 9334；scenario_1；LLM 关闭（use-llm 未勾选）。",
+  "precheck": {
+    "disk_md5": {
+      "app.js": "4d07866bdc99f89803981049cbc1aaa8",
+      "index.html": "5a956cdc6a1762cbf1b6ac56e6530c48",
+      "fin_noreset_same": true
+    },
+    "served_appjs_md5_5000": "4d07866bdc99f89803981049cbc1aaa8",
+    "served_appjs_md5_5001": "4d07866bdc99f89803981049cbc1aaa8",
+    "cache_version_5000": [
+      "http://127.0.0.1:5000/js/app.js?v=2026110901"
+    ],
+    "cache_version_5001": [
+      "app.js?v=2026110901"
+    ],
+    "services": {
+      "5000": {
+        "http": 200,
+        "pid": 35524,
+        "cwd": "fin_ver"
+      },
+      "5001": {
+        "http": 200,
+        "pid": 43668,
+        "cwd": "noreset"
+      }
+    }
+  },
+  "accounts": {
+    "5000": "msg_qa_1109a",
+    "5001": "msg_nr_1109a"
+  },
+  "sessions": {
+    "5000": [
+      {
+        "item": "item1 成功+记录不足",
+        "ui_session_id": "8a419084",
+        "db_session_id": "s_4b9a36717ab3c2bb05fefa1b",
+        "result": "success",
+        "reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。",
+        "created_at": "2026-11-09 21:15:16"
+      },
+      {
+        "item": "item2 干净成功",
+        "ui_session_id": "9926dc63",
+        "db_session_id": "s_2240d763650e6081b6b36f5a",
+        "result": "success",
+        "reason": "欺凌现象停止，调解成功。",
+        "created_at": "2026-11-09 21:15:43"
+      },
+      {
+        "item": "item3 失败",
+        "ui_session_id": "e61973fa",
+        "db_session_id": "s_f93a9250f8179314a1b2d667",
+        "result": "failure",
+        "reason": "受害者压力过大，调解失败。",
+        "created_at": "2026-11-09 21:16:10"
+      },
+      {
+        "item": "item4 超时",
+        "ui_session_id": "e441d243",
+        "db_session_id": "s_4292aefaefc6a42846713b8d",
+        "result": "timeout",
+        "reason": "对话轮次已达上限，未能有效解决。",
+        "created_at": "2026-11-09 21:16:25"
+      },
+      {
+        "item": "item5a 运行中主动停止",
+        "ui_session_id": "2366ccbc",
+        "db_session_id": "s_e01bc11fef709d8459ec51d4",
+        "result": "",
+        "reason": "",
+        "created_at": "2026-11-09 21:16:44"
+      },
+      {
+        "item": "item5b 轮间主动停止",
+        "ui_session_id": "357acd3a",
+        "db_session_id": "s_46fc166511b7bfd9b551ed41",
+        "result": "",
+        "reason": "",
+        "created_at": "2026-11-09 21:16:56"
+      },
+      {
+        "item": "item6 收敛顺序尝试（预设键）",
+        "ui_session_id": "7d384501",
+        "db_session_id": "s_b7f53455263a807eeac2e89b",
+        "result": "",
+        "reason": "",
+        "created_at": "2026-11-09 21:17:08"
+      },
+      {
+        "item": "补充 item5 截图",
+        "ui_session_id": "45ede04c",
+        "db_session_id": "s_8af845792ee75557dab82a07",
+        "result": "",
+        "reason": "",
+        "created_at": "2026-11-09 21:19:17"
+      }
+    ],
+    "5001": [
+      {
+        "item": "item7-项1复跑",
+        "ui_session_id": "84a5f22d",
+        "db_session_id": "s_c417d09c1a35eecfca0e058f",
+        "result": "success",
+        "reason": "欺凌行为已连续 3 轮停止，教师保护与跟进记录不足，按实际干预评分。",
+        "created_at": "2026-11-09 21:11:37"
+      },
+      {
+        "item": "item7-项5复跑",
+        "ui_session_id": "da8b5273",
+        "db_session_id": "s_0acabcd785ae354e5dae720a",
+        "result": "",
+        "reason": "",
+        "created_at": "2026-11-09 21:12:04"
+      }
+    ]
+  },
+  "config_writes": {
+    "item2": {
+      "ui_session_id": "9926dc63",
+      "keys": {
+        "victim_safety_min": 0,
+        "follow_up_status_min": 0
+      },
+      "http": 200,
+      "applied": true,
+      "readback": {
+        "victim_safety_min": 0.0,
+        "follow_up_status_min": 0.0,
+        "bullying_intensity_max": 0.2,
+        "attack_frequency_max": 0.2,
+        "retaliation_risk_max": 0.3,
+        "partial_round_min": 10,
+        "partial_intensity_max": 0.3
+      }
+    },
+    "item3": {
+      "ui_session_id": "e61973fa",
+      "keys": {
+        "victim_crisis_threshold": 0.8,
+        "victim_crisis_rounds": 1
+      },
+      "http": 200,
+      "applied": true,
+      "readback": {
+        "victim_crisis_threshold": 0.8,
+        "victim_crisis_rounds": 1,
+        "max_rounds": 40,
+        "min_rounds": 3
+      }
+    },
+    "item4": {
+      "ui_session_id": "e441d243",
+      "keys": {
+        "max_rounds": 3
+      },
+      "http": 200,
+      "applied": true,
+      "readback": {
+        "max_rounds": 3
+      }
+    },
+    "item6": {
+      "ui_session_id": "7d384501",
+      "keys": {
+        "bullying_stopped_rounds": 20,
+        "max_rounds": 30,
+        "victim_safety_min": 0,
+        "follow_up_status_min": 0,
+        "retaliation_risk_max": 1
+      },
+      "http": 200,
+      "applied": true,
+      "readback": {
+        "bullying_stopped_rounds": 20,
+        "max_rounds": 30,
+        "victim_safety_min": 0.0,
+        "follow_up_status_min": 0.0,
+        "retaliation_risk_max": 1.0,
+        "partial_round_min": 10,
+        "partial_intensity_max": 0.3
+      }
+    }
+  },
+  "item6_unconstructable": {
+    "observed": "按指定键写入并回读生效；连续 10 轮点击「不需要」均未出现收敛弹窗，第10轮 intensity=15%、attack_frequency=15%（均<20% 阈值），bullying_stopped_rounds=8/20（避免自动成功）。达到 max_rounds 前由脚本主动停止（结束弹窗为「📋 实训已结束」）。",
+    "reason": "收敛判定 resolved 还需满足 graph_builder.check_convergence 条件2/3：最近3条 bully hostile_score<0.2、最近2条 victim 无负面（src/multi_agent/graph_builder.py 条件2/3）；跳过干预时这些语义条件不满足，无法用 /auto-end-config 的数值键构造。partial_round_min 默认10，条件A仅在 intensity>0.30 时触发，与本题 15% 不符。",
+    "engineer_stub_citation": "test_evidence/task22_modal_smoke.json 的 no_stack {convergenceDisplay:'none', autoendActive:true} 与 stop_button_flow 为桩级验证；另有代码证据：app.js finalizeStop 展示前主动隐藏 convergence-modal（约 747-749 行），收敛「查看报告」回调先 stopSimulation 并在 autoend 已激活时跳过 showReport（约 2683-2688 行）。",
+    "impact": "真实后端触发的收敛→查看报告顺序在本轮未能构造；该项按 best-effort 记「未执行/未构造」，不据此判定通过。"
+  },
+  "observations": [
+    {
+      "item": "item4",
+      "note": "max_rounds=3 调参后，round3 结束弹窗正确显示超时；但左侧自动结束判定仍显示「距结束还需 3 轮」，未把 max_rounds 纳入 remaining 展示。属诊断面板口径问题，不影响本次文案验收，建议另行评估。"
+    },
+    {
+      "item": "5001 item1",
+      "note": "JSON 中 UI remaining 采样为 4/3/2/1（第5轮直接进入结束弹窗）；截图 msg_5001_item1.png 左侧面板在第5轮显示「已达结束条件」，可佐证 4→0。"
+    }
+  ],
+  "orphan_sessions": [
+    {
+      "db_session_id": "s_7cbe95a26fe5cae69e3d6d64",
+      "created_at": "2026-11-09 21:10:56",
+      "status": "running",
+      "cause": "首版脚本 JavaScript 辅助函数缺失导致 item1 超时中断，遗留会话；未删除数据。"
+    },
+    {
+      "db_session_id": "s_c64a98bac70a227c2f2b5b27",
+      "created_at": "2026-11-09 21:14:01",
+      "status": "running",
+      "cause": "同一首版脚本 item2 中断遗留；未删除数据。"
+    }
+  ],
+  "supplement_item5_visual": {
+    "modal": {
+      "title": "📋 实训已结束",
+      "subtitle": "您已主动结束本次模拟",
+      "reason": "报告将基于已有对话与干预数据生成分析，供您复盘参考。",
+      "badge": "已结束",
+      "endMessageCount": 1,
+      "sessionId": "45ede04c"
+    },
+    "report_open": true
+  }
+}

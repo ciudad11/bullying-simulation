@@ -1,0 +1,188 @@
+{
+  "steps": [
+    {
+      "step": "logged_in",
+      "data": {
+        "user": "qa_nrllm_1109a"
+      }
+    },
+    {
+      "step": "setup",
+      "data": {
+        "scenario": "scenario_1",
+        "level2": true,
+        "useLlm": true,
+        "useLlmDisabled": false,
+        "startVisible": true
+      }
+    },
+    {
+      "step": "round1",
+      "data": {
+        "messages": [
+          {
+            "id": "bully_1",
+            "sender": "徐凯",
+            "role": "bully",
+            "role_name": "霸凌者",
+            "role_icon": "😈",
+            "content": "（凑过去看了一眼画，夸张地皱眉）哟，这画的啥啊？抽象派？我怎么看着像我家小卖部门口贴的促销海报，还是过期的。",
+            "timestamp": "20:15:21",
+            "round": 1
+          },
+          {
+            "id": "bystander_b_1",
+            "sender": "刘洋",
+            "role": "bystander_b",
+            "role_name": "从众旁观者",
+            "role_icon": "👀",
+            "content": "（在后排偷瞄了一眼画，憋着笑，小声嘀咕）噗……还真有点像……",
+            "timestamp": "20:15:22",
+            "round": 1
+          },
+          {
+            "id": "victim_1",
+            "sender": "林小满",
+            "role": "victim",
+            "role_name": "受害者",
+            "role_icon": "😢",
+            "content": "（手还举着画，愣了一下，慢慢把画往身前收了收）不、不是促销海报……我画的是……是奶奶家的院子……（声音越来越小，最后几个字几乎听不见）",
+            "timestamp": "20:15:23",
+            "round": 1
+          }
+        ]
+      }
+    },
+    {
+      "step": "round2",
+      "data": {
+        "messages": [
+          {
+            "id": "bully_1",
+            "sender": "徐凯",
+            "role": "bully",
+            "role_name": "霸凌者",
+            "role_icon": "😈",
+            "content": "（凑过去看了一眼画，夸张地皱眉）哟，这画的啥啊？抽象派？我怎么看着像我家小卖部门口贴的促销海报，还是过期的。",
+            "timestamp": "20:15:21",
+            "round": 1
+          },
+          {
+            "id": "bystander_b_1",
+            "sender": "刘洋",
+            "role": "bystander_b",
+            "role_name": "从众旁观者",
+            "role_icon": "👀",
+            "content": "（在后排偷瞄了一眼画，憋着笑，小声嘀咕）噗……还真有点像……",
+            "timestamp": "20:15:22",
+            "round": 1
+          },
+          {
+            "id": "victim_1",
+            "sender": "林小满",
+            "role": "victim",
+            "role_name": "受害者",
+            "role_icon": "😢",
+            "content": "（手还举着画，愣了一下，慢慢把画往身前收了收）不、不是促销海报……我画的是……是奶奶家的院子……（声音越来越小，最后几个字几乎听不见）",
+            "timestamp": "20:15:23",
+            "round": 1
+          },
+          {
+            "id": "bystander_a_2",
+            "sender": "苏晴",
+            "role": "bystander_a",
+            "role_name": "正义旁观者",
+            "role_icon": "✨",
+            "content": "（往前探了探身，声音不大但很清楚）徐凯，人家画的是奶奶家的院子，你看那墙角还有一排花盆呢，促销海报上能有这个？",
+            "timestamp": "20:15:30",
+            "round": 2
+          },
+          {
+            "id": "bully_2",
+            "sender": "徐凯",
+            "role": "bully",
+            "role_name": "霸凌者",
+            "role_icon": "😈",
+            "content": "（斜眼瞟了苏晴一下，嗤了一声）花盆？我当是几个黑疙瘩呢，谁看得出来啊。苏晴你眼神真好，是不是平时看海报看多了练出来的。",
+            "timestamp": "20:15:31",
+            "round": 2
+          },
+          {
+            "id": "victim_2",
+            "sender": "林小满",
+            "role": "victim",
+            "role_name": "受害者",
+            "role_icon": "😢",
+            "content": "（把画往胸口贴紧，头低下去，声音发颤）那、那几个花盆……是我奶奶种的月季……（喉咙哽了一下，说不下去了）",
+            "timestamp": "20:15:32",
+            "round": 2
+          }
+        ]
+      }
+    }
+  ],
+  "log_baseline": {
+    "out_lines": 428,
+    "err_lines": 4
+  },
+  "account": "qa_nrllm_1109a",
+  "session_id": "53f68f47",
+  "js_errors": [],
+  "db_session": {
+    "id": "s_c86f2bcc7c0f8cd5e58812d5",
+    "user_id": "u_39b7a9785dd954a7",
+    "username": "qa_nr_1109a",
+    "level": 2,
+    "status": "running",
+    "result_type": "",
+    "created_at": "2026-11-09 20:15:18"
+  },
+  "assertions": {
+    "message_count": 6,
+    "rounds_present": [
+      1,
+      2
+    ],
+    "fallback_marker_hits": [],
+    "preset_exact_hits": [],
+    "empty_contents": [],
+    "sample_texts": [
+      "（凑过去看了一眼画，夸张地皱眉）哟，这画的啥啊？抽象派？我怎么看着像我家小卖部门口贴的促销海报，还是过期的。",
+      "（在后排偷瞄了一眼画，憋着笑，小声嘀咕）噗……还真有点像……",
+      "（手还举着画，愣了一下，慢慢把画往身前收了收）不、不是促销海报……我画的是……是奶奶家的院子……（声音越来越小，最后几个字几乎听不见）",
+      "（往前探了探身，声音不大但很清楚）徐凯，人家画的是奶奶家的院子，你看那墙角还有一排花盆呢，促销海报上能有这个？",
+      "（斜眼瞟了苏晴一下，嗤了一声）花盆？我当是几个黑疙瘩呢，谁看得出来啊。苏晴你眼神真好，是不是平时看海报看多了练出来的。",
+      "（把画往胸口贴紧，头低下去，声音发颤）那、那几个花盆……是我奶奶种的月季……（喉咙哽了一下，说不下去了）"
+    ]
+  },
+  "log_new": {
+    "out_new_lines": 79,
+    "err_new_lines": 0,
+    "llm_raw_count": 6,
+    "invalid_port": 0,
+    "fallback_text": 0,
+    "api_call_failed": 0,
+    "retry_failed": 0,
+    "llm_raw_samples": [
+      "[DEBUG] 徐凯 LLM raw: '（凑过去看了一眼画，夸张地皱眉）哟，这画的啥啊？抽象派？我怎么看着像我家小卖部门口贴的促销海报，还是过期的。'",
+      "[DEBUG] 刘洋 LLM raw: '（在后排偷瞄了一眼画，憋着笑，小声嘀咕）噗……还真有点像……'",
+      "[DEBUG] 林小满 LLM raw: '（手还举着画，愣了一下，慢慢把画往身前收了收）不、不是促销海报……我画的是……是奶奶家的院子……（声音越来越小，最后几个字几乎听不见）'",
+      "[DEBUG] 苏晴 LLM raw: '（往前探了探身，声音不大但很清楚）徐凯，人家画的是奶奶家的院子，你看那墙角还有一排花盆呢，促销海报上能有这个？'",
+      "[DEBUG] 徐凯 LLM raw: '（斜眼瞟了苏晴一下，嗤了一声）花盆？我当是几个黑疙瘩呢，谁看得出来啊。苏晴你眼神真好，是不是平时看海报看多了练出来的。'",
+      "[DEBUG] 林小满 LLM raw: '（把画往胸口贴紧，头低下去，声音发颤）那、那几个花盆……是我奶奶种的月季……（喉咙哽了一下，说不下去了）'"
+    ]
+  },
+  "log_full_scan": {
+    "invalid_port": 0,
+    "fallback_text": 0,
+    "api_call_failed": 0,
+    "retry_failed": 0
+  },
+  "checks": {
+    "use_llm_enabled_and_checked": true,
+    "real_model_text": true,
+    "no_three_errors_in_new_log": true,
+    "no_three_errors_in_full_log": true
+  },
+  "account_note": "浏览器沿用上一脚本已登录的 qa_nr_1109a，未切换账号；LLM 会话实际归属 qa_nr_1109a。qa_nrllm_1109a 已创建但未使用。"
+}

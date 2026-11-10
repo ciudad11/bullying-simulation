@@ -1,0 +1,10 @@
+{
+  "pid": 43668,
+  "env_count": 87,
+  "NO_PROXY": "localhost,.localhost,127.0.0.1,127.0.0.0/8,::1",
+  "has_bracket_ipv6": false,
+  "proxy_keys": {
+    "NO_PROXY": "localhost,.localhost,127.0.0.1,127.0.0.0/8,::1"
+  },
+  "cwd_hint_PWD": "D:/bully_simulation_pack_v2_20260713/noreset"
+}

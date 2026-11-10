@@ -1,0 +1,27 @@
+# === 密钥与本地配置（严禁入库） ===
+.env
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# === 运行时日志与临时输出 ===
+logs/
+*.log
+_diag_out.txt
+
+# === Python 缓存 ===
+__pycache__/
+*.pyc
+*.pyo
+
+# === 虚拟环境与 IDE ===
+.venv/
+venv/
+.idea/
+.vscode/
+
+# === 测试临时浏览器配置目录 ===
+_edge_*/

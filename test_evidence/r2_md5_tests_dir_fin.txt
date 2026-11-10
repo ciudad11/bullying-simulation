@@ -1,0 +1,11 @@
+c5a6a02141317655427699facf074238 *./.golden_fingerprint
+6e720db716bc3bf3e71b232b99c0c0c3 *./test_coaching.py
+83694b4d1f57e77adcacfd8cac2ca2e2 *./test_llm_config.py
+bcca43639136e66ac64c8663db26f87f *./test_placeholders.py
+2ff65d52400b880b7e6aaa10b16777fd *./test_presets.py
+93a73aa8c243fdb701a43b00a943090d *./test_report_builder.py
+0f80d0181a71f37278734399e3a2a777 *./test_report_contract.py
+ddd6bdb76d2e67497423f50996db68f8 *./test_risk_cap_semantics.py
+197db4c6c31c032ff38dcc6e931b023c *./test_rules_engine.py
+979df9592258cc9acc0189abd6e2f074 *./test_scoring_calibration.py
+f8e4800861518ea3582ab9d9fbce6dbe *./test_termination.py

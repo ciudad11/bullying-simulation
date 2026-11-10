@@ -1,0 +1,173 @@
+/* ============================================================
+ * 登录/注册覆盖层 样式
+ * ============================================================ */
+
+.auth-overlay {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.auth-overlay.hidden {
+    display: none;
+}
+
+.auth-card {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 36px 40px;
+    width: 380px;
+    max-width: 90vw;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+
+.auth-header {
+    text-align: center;
+    margin-bottom: 24px;
+}
+
+.auth-header h1 {
+    font-size: 1.3rem;
+    color: #1a1a2e;
+    margin: 0 0 4px 0;
+}
+
+.auth-subtitle {
+    color: #888;
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+.auth-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid #e8e8e8;
+    margin-bottom: 20px;
+}
+
+.auth-tab {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    background: none;
+    font-size: 0.95rem;
+    color: #999;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+}
+
+.auth-tab.active {
+    color: var(--primary, #4361ee);
+    border-bottom-color: var(--primary, #4361ee);
+    font-weight: 600;
+}
+
+.auth-form.hidden {
+    display: none;
+}
+
+.auth-form .form-group {
+    margin-bottom: 14px;
+}
+
+.auth-form label {
+    display: block;
+    font-size: 0.82rem;
+    color: #555;
+    margin-bottom: 4px;
+    font-weight: 500;
+}
+
+.auth-form input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #dde;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+.auth-form input:focus {
+    border-color: var(--primary, #4361ee);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(67,97,238,0.1);
+}
+
+.auth-error {
+    background: #fff0f0;
+    color: #d32f2f;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    margin-bottom: 12px;
+    border-left: 3px solid #d32f2f;
+}
+
+.auth-error.hidden {
+    display: none;
+}
+
+.auth-hint {
+    text-align: center;
+    font-size: 0.8rem;
+    color: #999;
+    margin: 14px 0 0 0;
+}
+
+.auth-footer {
+    text-align: center;
+    margin-top: 20px;
+    color: #bbb;
+}
+
+/* User display in header */
+.user-display {
+    font-size: 0.85rem;
+    color: #fff;
+    opacity: 0.9;
+    margin-right: 4px;
+    white-space: nowrap;
+}
+
+#btn-logout {
+    font-size: 0.9rem;
+    padding: 4px 8px;
+    opacity: 0.7;
+}
+
+#btn-logout:hover {
+    opacity: 1;
+}
+
+/* Admin link in header */
+.admin-link {
+    color: #ffd700;
+    text-decoration: none;
+    font-size: 0.85rem;
+    padding: 4px 10px;
+    border: 1px solid rgba(255,215,0,0.4);
+    border-radius: 4px;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+.admin-link:hover {
+    background: rgba(255,215,0,0.15);
+    border-color: #ffd700;
+}
+.admin-link.hidden { display: none; }
+
+/* App container fade-in */
+.app-container {
+    transition: opacity 0.3s;
+}
+
+.app-container.hidden {
+    display: none;
+}

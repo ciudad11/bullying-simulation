@@ -1,0 +1,43 @@
+{
+  "listeners": {
+    "5000": [
+      35524
+    ],
+    "5001": [
+      43668
+    ]
+  },
+  "ports": {
+    "5000": {
+      "listener_count": 1,
+      "processes": [
+        {
+          "pid": 35524,
+          "peb": "0xca0a754000",
+          "cwd": "D:\\bully_simulation_pack_v2_20260713\\fin_ver\\",
+          "cmdline": "\"D:\\Program Files\\Python312\\python.exe\" run.py"
+        }
+      ],
+      "http": 200
+    },
+    "5001": {
+      "listener_count": 1,
+      "processes": [
+        {
+          "pid": 43668,
+          "peb": "0x51b0030000",
+          "cwd": "D:\\bully_simulation_pack_v2_20260713\\noreset\\",
+          "cmdline": "\"D:\\Program Files\\Python312\\python.exe\" run.py"
+        }
+      ],
+      "http": 200
+    }
+  },
+  "checks": {
+    "single_listener_each": true,
+    "5000_cwd_fin_ver": true,
+    "5001_cwd_noreset": true,
+    "http_200_both": true,
+    "different_pids": true
+  }
+}

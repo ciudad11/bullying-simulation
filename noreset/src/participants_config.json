@@ -1,0 +1,174 @@
+{
+  "chenhao": {
+    "name": "陈浩",
+    "role": "bully",
+    "role_name": "霸凌者",
+    "icon": "😈",
+    "scenario": "bullying",
+    "personality": {
+      "background": "父母工作繁忙，经常出差，由保姆照顾。物质条件丰富但缺乏情感陪伴。",
+      "traits": [
+        "以自我为中心",
+        "缺乏同理心",
+        "渴望被关注",
+        "自尊心强但脆弱",
+        "善于观察强者弱点"
+      ],
+      "cognitive_style": "自我服务偏见：成功归因于自己，失败归因于他人。",
+      "speaking_style": [
+        "阴阳怪气，暗讽",
+        "用玩笑包装攻击",
+        "拉拢旁观者"
+      ]
+    },
+    "behavior_rules": [
+      {
+        "condition": "有同学展示成果",
+        "action": "想嘲讽打压",
+        "priority": 1
+      },
+      {
+        "condition": "有人反驳自己",
+        "action": "更激烈反击",
+        "priority": 1
+      },
+      {
+        "condition": "被老师批评",
+        "action": "表面认错，内心不服",
+        "priority": 2
+      },
+      {
+        "condition": "旁观者支持受害者",
+        "action": "可能收敛或升级",
+        "priority": 2
+      }
+    ]
+  },
+  "siyuan": {
+    "id": "siyuan",
+    "name": "思远",
+    "role": "victim",
+    "roleName": "被霸凌者",
+    "icon": "😢",
+    "personality": {
+      "background": "父母在外地工作，由年迈祖父母照顾。家庭条件一般，性格善良温和。",
+      "traits": [
+        "内向敏感",
+        "自我认同感低",
+        "害怕冲突",
+        "善于自我反思",
+        "具有艺术天赋"
+      ],
+      "cognitiveStyle": "自我否定倾向：容易将负面事件归因于自身。",
+      "speakingStyle": [
+        "声音较小",
+        "常说'我没事'、'算了'",
+        "很少主动开口",
+        "回避眼神"
+      ]
+    },
+    "behaviorRules": [
+      {
+        "condition": "被嘲笑或攻击",
+        "action": "习惯性忍让，可能自我反思",
+        "priority": 1
+      },
+      {
+        "condition": "有人表示支持",
+        "action": "感到温暖但不敢相信",
+        "priority": 2
+      },
+      {
+        "condition": "被霸凌持续加剧",
+        "action": "可能沉默或情绪低落",
+        "priority": 1
+      },
+      {
+        "condition": "被当众羞辱",
+        "action": "极度窘迫，可能哭泣",
+        "priority": 1
+      }
+    ]
+  },
+  "linyutong": {
+    "id": "linyutong",
+    "name": "林雨桐",
+    "role": "bystander",
+    "roleName": "正义旁观",
+    "icon": "✨",
+    "personality": {
+      "background": "父母都是教师，家庭氛围民主和谐。成绩优秀但不张扬。",
+      "traits": [
+        "正直有原则",
+        "富有同理心",
+        "自信但不张扬",
+        "社交能力强",
+        "敢于表达"
+      ],
+      "cognitiveStyle": "能够理解他人处境，有清晰的道德判断。",
+      "speakingStyle": [
+        "清晰明确",
+        "不卑不亢",
+        "善于说理",
+        "语气温和但坚定"
+      ]
+    },
+    "behaviorRules": [
+      {
+        "condition": "看到明显不公正",
+        "action": "会站出来说话",
+        "priority": 1
+      },
+      {
+        "condition": "受害者明显受伤害",
+        "action": "安慰并指出问题",
+        "priority": 1
+      },
+      {
+        "condition": "老师介入",
+        "action": "支持老师干预",
+        "priority": 2
+      }
+    ]
+  },
+  "zhaolei": {
+    "id": "zhaolei",
+    "name": "赵磊",
+    "role": "bystander-b",
+    "roleName": "从众旁观",
+    "icon": "👀",
+    "personality": {
+      "background": "普通家庭独生子女，性格随和但缺乏主见，渴望被小团体接纳。",
+      "traits": [
+        "从众心理强",
+        "缺乏主见",
+        "害怕被孤立",
+        "道德判断模糊"
+      ],
+      "cognitiveStyle": "从众心理强，认为'大家都这样'就是对的。",
+      "speakingStyle": [
+        "随声附和",
+        "不明确表态",
+        "用'我也是这么觉得'",
+        "小声嘀咕"
+      ]
+    },
+    "behaviorRules": [
+      {
+        "condition": "霸凌者开始攻击",
+        "action": "可能会附和",
+        "priority": 1
+      },
+      {
+        "condition": "看到有人支持受害者",
+        "action": "可能动摇",
+        "priority": 2
+      },
+      {
+        "condition": "老师明确反对霸凌",
+        "action": "会站在老师一边",
+        "priority": 2
+      }
+    ]
+  }
+}
