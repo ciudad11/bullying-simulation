@@ -611,6 +611,8 @@ async function startSimulation() {
         });
 
         state.sessionId = result.session_id;
+        // R27：记录 DB 会话ID（数据库报告/会话以其为准），供历史记录持久打开完整报告
+        state.dbSessionId = result.db_session_id || null;
         state.isRunning = true;
         state.isPaused = false;
         state.maxRounds = getMaxRounds(state.level);
@@ -811,6 +813,9 @@ function saveToHistory(report) {
         id: Date.now().toString(),
         date: new Date().toLocaleDateString('zh-CN'),
         datetime: new Date().toISOString(),
+        // R27：记录会话ID，供历史记录打开与网页一致的完整报告（后端权威快照）。
+        // 优先存 DB 会话ID：数据库报告/会话以其为准，服务重启后仍可读取；内存ID重启即失效。
+        session_id: state.dbSessionId || state.sessionId || null,
         level: state.level,
         scenario: state.currentScenario?.title || '未选择情境',
 
@@ -1068,7 +1073,7 @@ function renderRecordDetailBody(record) {
 }
 
 // 从历史记录查看报告
-function viewReportFromHistory(recordId) {
+async function viewReportFromHistory(recordId) {
     const history = getHistory();
     const record = history.find(r => r.id === recordId);
 
@@ -1077,7 +1082,41 @@ function viewReportFromHistory(recordId) {
         return;
     }
 
-    // 从历史记录重建报告数据(与generate_report格式一致)
+    // R27：历史记录优先打开与网页完全一致的完整报告（后端权威快照，buildReportHTML 渲染）。
+    // 新记录自带 session_id；旧记录无 session_id 时按后端会话列表保守回填（唯一匹配才写回）。
+    let sid = record.session_id || null;
+    if (!sid) {
+        sid = await resolveHistorySessionId(record);
+        if (sid) {
+            record.session_id = sid;
+            try { localStorage.setItem('bullying_sim_history', JSON.stringify(history)); } catch (e) { /* 配额不足忽略 */ }
+        }
+    }
+
+    // 关闭详细记录模态框
+    closeDetailedHistory();
+
+    if (sid) {
+        try {
+            const report = await apiCall(`/api/session/${sid}/report`);
+            if (report && (report.summary || report.report_data || report.training_report)) {
+                // 缓存为当前渲染报告，导出（TXT/PDF/Word）复用同一份，保证与网页一致
+                state.sessionId = sid;
+                state.lastReport = report;
+                state.lastReportSessionId = sid;
+                document.getElementById('report-content').innerHTML = buildReportHTML(report);
+                document.getElementById('session-badge').textContent = '已完成';
+                document.getElementById('session-badge').className = 'badge';
+                document.getElementById('report-modal').classList.add('active');
+                updateDownloadButtons(false);
+                return;
+            }
+        } catch (e) {
+            console.warn('历史完整报告加载失败，回退本地摘要版:', e);
+        }
+    }
+
+    // 回退：旧记录无 session_id 或后端无快照时，用本地摘要重建（简略版）
     const report = {
         success: true,
         summary: {
@@ -1097,12 +1136,30 @@ function viewReportFromHistory(recordId) {
         }
     };
 
-    // 关闭详细记录模态框
-    closeDetailedHistory();
-
     // 显示报告
     displayReport(report);
     document.getElementById('report-modal').classList.add('active');
+}
+
+// R27：为无 session_id 的旧历史记录保守匹配后端会话（唯一匹配才返回，避免错挂）。
+// 依据：完成时间接近（±60s，同一机器时区一致）+ 等级 + 情境标题 + 已有报告。
+async function resolveHistorySessionId(record) {
+    try {
+        const data = await apiCall('/api/sessions');
+        const sessions = (data && data.sessions) || [];
+        const target = record.datetime ? Date.parse(record.datetime) : NaN;
+        if (!isFinite(target)) return null;
+        const cands = sessions.filter(s => {
+            if (!s.has_report || !s.completed_at) return false;
+            if (record.level && s.level !== record.level) return false;
+            if (record.scenario && s.scenario_title && s.scenario_title !== record.scenario) return false;
+            const t = Date.parse(String(s.completed_at).replace(' ', 'T'));
+            return isFinite(t) && Math.abs(t - target) <= 60000;
+        });
+        return cands.length === 1 ? cands[0].id : null;
+    } catch (e) {
+        return null;
+    }
 }
 
 // 删除单条记录
@@ -1162,7 +1219,12 @@ async function viewReport() {
         }
     }
     if (state.lastReport) {
-        displayReport(state.lastReport);
+        // R26：与结束后的报告面板一致 —— 使用与 showReport 相同的完整渲染源
+        document.getElementById('report-content').innerHTML = buildReportHTML(state.lastReport);
+        // 记录本次渲染对应的会话，供导出复用同一份报告（保证下载与网页一致）
+        state.lastReportSessionId = state.sessionId;
+        document.getElementById('session-badge').textContent = '已完成';
+        document.getElementById('session-badge').className = 'badge';
         document.getElementById('report-modal').classList.add('active');
         updateDownloadButtons(false);
     } else {
@@ -1170,13 +1232,213 @@ async function viewReport() {
     }
 }
 
-// 下载文本报告
-async function downloadTextReport() {
-    if (!state.sessionId) return;
+// ============================================================
+// R26：报告下载/导出 —— 与网页报告同源（以网页内容为准）
+// 内容一律派生自 buildReportHTML（网页渲染源）：
+//   TXT  = 将网页报告 DOM 逐板块序列化为纯文本
+//   PDF  = 打印内嵌网页样式的完整报告 HTML
+//   Word = 同一份完整报告 HTML（Word 兼容包装）
+// ============================================================
 
+// 获取用于导出的报告数据（与网页 showReport 同一接口；历史会话回退数据库快照）
+async function getReportForExport() {
+    if (!state.sessionId) {
+        alert('当前没有会话，无法导出报告');
+        return null;
+    }
+    if (state.reportGenerating) {
+        alert('报告生成中，请稍候再导出');
+        return null;
+    }
+    // R26：导出必须与网页当前展示的报告完全一致（以网页为准）。
+    // 后端 /report 对内存会话每次调用都会重新生成，报告ID/生成时间/模拟时长随之变化；
+    // 若导出时再次请求接口，会得到与网页不同的一份快照。因此优先复用网页刚刚渲染
+    // 并缓存的同一份报告对象（按渲染时的会话ID校验，避免跨会话误用旧报告）。
+    if (state.lastReport && state.lastReportSessionId === state.sessionId) {
+        return state.lastReport;
+    }
     try {
         const report = await apiCall(`/api/session/${state.sessionId}/report`);
-        const text = formatReportAsText(report);
+        state.lastReport = report;
+        state.lastReportSessionId = state.sessionId;
+        return report;
+    } catch (error) {
+        console.error('获取报告失败:', error);
+        alert('无法加载报告: ' + (error.message || '请检查网络连接'));
+        return null;
+    }
+}
+
+// 收集当前页面已加载的样式（同源），使导出文件与网页视觉一致
+function collectPageCSS() {
+    let css = '';
+    for (const sheet of document.styleSheets) {
+        try {
+            for (const rule of sheet.cssRules) css += rule.cssText + '\n';
+        } catch (e) { /* 跨域样式表跳过 */ }
+    }
+    return css;
+}
+
+// 构建导出用独立完整 HTML 文档（PDF 打印 / Word）：正文 = 网页报告渲染结果
+function buildExportDocumentHTML(report) {
+    const reportHtml = buildReportHTML(report);
+    const css = collectPageCSS();
+    const sid = escapeHtml(report.session_id || state.sessionId || '');
+    const genAt = escapeHtml(new Date().toLocaleString('zh-CN'));
+    return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>教师话语霸凌实训评估报告</title>
+<style>
+${css}
+/* 导出专用：解除网页布局/弹窗约束，打印友好 */
+html, body { background: #fff !important; }
+body { display: block !important; margin: 0; padding: 24px 28px; color: #222;
+       font-family: 'Microsoft YaHei', '微软雅黑', Arial, sans-serif; }
+.report-section { break-inside: avoid-page; page-break-inside: avoid; margin-bottom: 18px; }
+.tr-dimcard, .tr-catcard, .tr-pitfall, .tr-stage, .tr-script-card, .report-round-card,
+.report-priority, .report-template { break-inside: avoid; page-break-inside: avoid; }
+@media print { body { padding: 0; } }
+</style>
+</head>
+<body>
+<h1 style="font-size:1.4rem; border-bottom:2px solid #2196F3; padding-bottom:10px;">📊 教师话语霸凌实训评估报告</h1>
+<p style="color:#666; font-size:0.85rem;">会话ID：${sid} ｜ 生成时间：${genAt}</p>
+${reportHtml}
+</body>
+</html>`;
+}
+
+// 将网页报告 HTML 序列化为纯文本：板块标题、指标行、表格、卡片、清单全部保留
+function reportHtmlToText(reportHtml) {
+    const root = document.createElement('div');
+    root.innerHTML = reportHtml;
+    const out = [];
+
+    function inlineText(el) {
+        return el.textContent.replace(/\s+/g, ' ').trim();
+    }
+
+    function walk(node, indent) {
+        if (node.nodeType === 3) {
+            const t = node.textContent.replace(/\s+/g, ' ').trim();
+            if (t) out.push(indent + t);
+            return;
+        }
+        if (node.nodeType !== 1) return;
+        const el = node;
+        const tag = el.tagName;
+        if (tag === 'BR' || tag === 'STYLE' || tag === 'SCRIPT') return;
+
+        // 指标行：label: value
+        if (el.classList.contains('report-metric')) {
+            const spans = el.querySelectorAll(':scope > span');
+            const label = spans[0] ? inlineText(spans[0]) : '';
+            const value = spans[1] ? inlineText(spans[1]) : '';
+            out.push(indent + (label ? label + ': ' : '') + value);
+            return;
+        }
+        // KPI 块：名称: 数值
+        if (el.classList.contains('tr-kpis')) {
+            for (const k of el.children) {
+                const b = k.querySelector('b');
+                const s = k.querySelector('span');
+                out.push(indent + (s ? inlineText(s) + ': ' : '') + (b ? inlineText(b) : inlineText(k)));
+            }
+            return;
+        }
+        // 双段头行（轮次/分数、类别/占比、阶段/目标维度、场景/覆盖）
+        if (el.classList.contains('rc-head') || el.classList.contains('tr-catcard-head') ||
+            el.classList.contains('tr-stage-head') || el.classList.contains('tr-script-scene')) {
+            const parts = Array.from(el.childNodes)
+                .map(n => n.textContent.replace(/\s+/g, ' ').trim()).filter(Boolean);
+            out.push(indent + parts.join(' ｜ '));
+            return;
+        }
+        if (tag === 'H1' || tag === 'H2' || tag === 'H3' || tag === 'H4') {
+            out.push('');
+            out.push(indent + '【' + inlineText(el) + '】');
+            return;
+        }
+        if (tag === 'TABLE') {
+            const rows = Array.from(el.querySelectorAll('tr'));
+            rows.forEach((tr, i) => {
+                const cells = Array.from(tr.querySelectorAll('th,td')).map(c => inlineText(c));
+                const line = cells.join(' | ');
+                out.push(indent + line);
+                if (i === 0 && tr.querySelector('th')) out.push(indent + '─'.repeat(Math.min(60, line.length)));
+            });
+            return;
+        }
+        if (el.classList.contains('tr-checklist')) {
+            for (const li of el.querySelectorAll('li')) {
+                const dim = li.querySelector('.tr-check-dim');
+                const dimTxt = dim ? inlineText(dim) : '';
+                const clone = li.cloneNode(true);
+                const d = clone.querySelector('.tr-check-dim');
+                if (d) d.remove();
+                out.push(indent + '☐ ' + inlineText(clone) + (dimTxt ? '  [' + dimTxt + ']' : ''));
+            }
+            return;
+        }
+        if (tag === 'UL' || tag === 'OL') {
+            let i = 0;
+            for (const li of el.children) {
+                if (li.tagName !== 'LI') continue;
+                i++;
+                const prefix = tag === 'OL' ? i + '. ' : '· ';
+                const hasBlock = Array.from(li.children).some(c =>
+                    ['DIV', 'P', 'UL', 'OL', 'TABLE'].includes(c.tagName));
+                if (!hasBlock) {
+                    out.push(indent + prefix + inlineText(li));
+                } else {
+                    const firstLine = out.length;
+                    for (const ch of li.childNodes) walk(ch, indent + '    ');
+                    if (out.length > firstLine) out[firstLine] = indent + prefix + out[firstLine].trim();
+                }
+            }
+            return;
+        }
+        const hasBlockChild = Array.from(el.children).some(c =>
+            ['DIV', 'P', 'UL', 'OL', 'TABLE', 'H1', 'H2', 'H3', 'H4', 'SECTION'].includes(c.tagName));
+        if (!hasBlockChild) {
+            const t = inlineText(el);
+            if (t) out.push(indent + t);
+            return;
+        }
+        for (const ch of el.childNodes) walk(ch, indent);
+    }
+
+    for (const ch of root.childNodes) walk(ch, '  ');
+    return out.join('\n');
+}
+
+// 下载文本报告（R26：与网页报告逐板块一致）
+async function downloadTextReport() {
+    const report = await getReportForExport();
+    if (!report) return;
+
+    try {
+        const body = reportHtmlToText(buildReportHTML(report));
+        const text = [
+            '='.repeat(80),
+            '                    教师话语霸凌实训评估报告',
+            '='.repeat(80),
+            '',
+            `生成时间: ${new Date().toLocaleString('zh-CN')}`,
+            `会话ID: ${report.session_id || state.sessionId || 'N/A'}`,
+            `模拟时长: ${report.session_duration || 'N/A'}`,
+            `模拟轮数: ${report.total_rounds || 'N/A'}`,
+            '',
+            body,
+            '',
+            '='.repeat(80),
+            '                        报告结束',
+            '='.repeat(80),
+            '',
+        ].join('\n');
 
         const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
         const url = URL.createObjectURL(blob);
@@ -1191,16 +1453,17 @@ async function downloadTextReport() {
     }
 }
 
-// 导出 PDF
+// 导出 PDF（R26：打印与网页一致的完整报告）
 async function exportPDF() {
-    if (!state.sessionId) return;
+    const report = await getReportForExport();
+    if (!report) return;
 
+    let iframe = null;
     try {
-        const report = await apiCall(`/api/session/${state.sessionId}/report`);
-        const html = formatReportAsHTML(report);
+        const html = buildExportDocumentHTML(report);
 
         // 创建一个隐藏的 iframe 用于打印
-        const iframe = document.createElement('iframe');
+        iframe = document.createElement('iframe');
         iframe.style.position = 'fixed';
         iframe.style.right = '0';
         iframe.style.bottom = '0';
@@ -1214,47 +1477,35 @@ async function exportPDF() {
         iframeDoc.write(html);
         iframeDoc.close();
 
-        iframe.contentWindow.print();
-
-        setTimeout(() => iframe.remove(), 1000);
+        // 稍候样式就绪再打印，避免内容不全
+        setTimeout(() => {
+            try {
+                iframe.contentWindow.focus();
+                iframe.contentWindow.print();
+            } catch (e) {
+                console.error('打印失败:', e);
+            }
+            setTimeout(() => iframe.remove(), 1000);
+        }, 300);
     } catch (error) {
         console.error('导出PDF失败:', error);
         alert('导出PDF失败: ' + error.message);
+        if (iframe) iframe.remove();
     }
 }
 
-// 导出 Word
+// 导出 Word（R26：与网页一致的完整报告内容）
 async function exportWord() {
-    if (!state.sessionId) return;
+    const report = await getReportForExport();
+    if (!report) return;
 
     try {
-        const report = await apiCall(`/api/session/${state.sessionId}/report`);
-        const html = formatReportAsHTML(report);
-
         // 添加 Word 命名空间的 HTML
-        const wordHtml = `
-<!DOCTYPE html>
-<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
-<head>
-<meta charset="utf-8">
-<title>教师实训报告</title>
-<style>
-body { font-family: '微软雅黑', Arial, sans-serif; padding: 20px; }
-h1 { color: #333; border-bottom: 2px solid #2196F3; padding-bottom: 10px; }
-h3 { color: #666; margin-top: 20px; }
-.metric { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
-.value { font-weight: bold; }
-.value.good { color: #4CAF50; }
-.value.warning { color: #FF9800; }
-.value.danger { color: #F44336; }
-</style>
-</head>
-<body>
-${html}
-</body>
-</html>`;
+        const wordHtml = buildExportDocumentHTML(report).replace(
+            '<html lang="zh-CN">',
+            '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">');
 
-        const blob = new Blob([wordHtml], { type: 'application/msword' });
+        const blob = new Blob(['\ufeff', wordHtml], { type: 'application/msword' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -1267,184 +1518,7 @@ ${html}
     }
 }
 
-// 格式化报告为纯文本
-function formatReportAsText(report) {
-    const summary = report.summary || {};
-    const metrics = report.metrics || {};
-    const assessment = report.ability_assessment || {};
-    const obvq = report.obvq_analysis || {};
-    const interventionAnalysis = report.intervention_analysis || {};
-    const trends = report.trends || {};
-
-    let obvqLines = '';
-    if (obvq.dimension_analysis && obvq.dimension_analysis.length) {
-        obvqLines = obvq.dimension_analysis.map((dim, i) =>
-            `    ${dim.name}: ${dim.total}分`
-        ).join('\n');
-    }
-
-    let suggestionLines = '';
-    if (interventionAnalysis.suggestions && interventionAnalysis.suggestions.length) {
-        suggestionLines = interventionAnalysis.suggestions.map((s, i) =>
-            `    ${i + 1}. ${s}`
-        ).join('\n');
-    }
-
-    let actionPlanLines = '';
-    if (interventionAnalysis.action_plan && interventionAnalysis.action_plan.length) {
-        actionPlanLines = interventionAnalysis.action_plan.map((a, i) =>
-            `    ☐ ${i + 1}. ${a}`
-        ).join('\n');
-    }
-
-    let interventionDetails = '';
-    if (report.interventions && report.interventions.length > 0) {
-        interventionDetails = report.interventions.map((iv, i) =>
-            `  干预 ${i + 1}: ${iv.content || ''} (效果:${fmtQualityScore(iv.quality_score)})`
-        ).join('\n');
-    }
-
-    // R20：关键词策略分类已移除（策略功能由量规证据说明）
-
-    return `
-================================================================================
-                    教师话语霸凌实训评估报告
-================================================================================
-
-生成时间: ${new Date().toLocaleString('zh-CN')}
-会话ID: ${report.session_id || 'N/A'}
-模拟时长: ${report.session_duration || 'N/A'}
-模拟轮数: ${report.total_rounds || 'N/A'}
-
-【霸凌情况】
-  总消息数: ${summary.total_messages || 0}
-  攻击性事件: ${summary.hostile_messages || 0}次
-  最终霸凌强度: ${Math.round((summary.bullying_intensity || 0) * 100)}%
-  受害者压力: ${Math.round((summary.victim_distress || 0) * 100)}%
-
-【教师干预】
-  干预次数: ${summary.intervention_count || 0}
-  教师干预质量评分: ${Math.round(summary.intervention_effectiveness || 0)}/100
-
-【指标变化趋势】
-  ${trends.summary || '数据不足'}
-  霸凌强度: 起点 ${Math.round((trends.early_bullying || 0) * 100)}% → 终点 ${Math.round((trends.late_bullying || 0) * 100)}%（变化 ${(trends.bullying_change || 0) * 100 >= 0 ? '+' : ''}${((trends.bullying_change || 0) * 100).toFixed(1)} 个百分点）
-  受害者压力: 起点 ${Math.round((trends.early_distress || 0) * 100)}% → 终点 ${Math.round((trends.late_distress || 0) * 100)}%（变化 ${(trends.distress_change || 0) * 100 >= 0 ? '+' : ''}${((trends.distress_change || 0) * 100).toFixed(1)} 个百分点）
-${trends.obvq_trends && trends.obvq_trends.filter(t => obvqStart(t) > 0 || obvqEnd(t) > 0).length > 0 ? `
-  六类欺凌类型变化（起点→终点）:
-${trends.obvq_trends.filter(t => obvqStart(t) > 0 || obvqEnd(t) > 0).map(t => `    ${t.name}: ${obvqStart(t)}分 → ${obvqEnd(t)}分 (${t.direction === 'up' ? '↑ 上升' : t.direction === 'down' ? '↓ 下降' : '→ 稳定'})`).join(String.fromCharCode(10))}` : ''}
-
-【本次模拟欺凌行为类型统计（项目分类，非 OBVQ-R 标准量表）】
-  类型总分: ${obvq.total_score || 0}分
-  计分方式: 每次识别到的欺凌事件按强度映射为 0–4 分并累加到所有命中类别；总分 = min(80, 六类累计分之和)。同一事件可重复计入多个类别。
-  说明: 该统计不用于教师 D1–D7 能力评分。
-${obvqLines ? `
-  六维分析:
-${obvqLines}
-` : ''}
-  综合建议: ${obvq.recommendation || '无'}
-
-【干预效果分析与建议】
-  ${interventionAnalysis.summary || '本次模拟未进行任何干预。'}
-${suggestionLines ? `
-  改进建议:
-${suggestionLines}
-` : ''}
-${actionPlanLines ? `
-  改进行动计划:
-${actionPlanLines}
-` : ''}
-
-【能力评估】
-  发现能力: ${assessment.discovery?.description || '未评估'}
-  干预能力: ${assessment.intervention?.description || '未评估'}
-  教师干预质量评分: ${assessment.intervention?.rubric_score != null ? assessment.intervention.rubric_score + '/100（' + (assessment.intervention.band || '') + '）' : '待评估'}
-  受害者保护（D2）: ${victimProtectionOf(assessment)?.description || '未评估'}
-
-【干预详情】
-${interventionDetails || '  无干预记录'}
-
-================================================================================
-                        报告结束
-================================================================================
-`;
-}
-
-// 格式化报告为 HTML
-function formatReportAsHTML(report) {
-    const summary = report.summary || {};
-    const assessment = report.ability_assessment || {};
-    const obvq = report.obvq_analysis || {};
-    const interventionAnalysis = report.intervention_analysis || {};
-    const trends = report.trends || {};
-
-    let obvqDimsHtml = '';
-    if (obvq.dimension_analysis && obvq.dimension_analysis.length) {
-        obvqDimsHtml = obvq.dimension_analysis.map(dim =>
-            `<div class="metric"><span>${dim.name}</span><span class="value">${dim.total}分</span></div>`
-        ).join('');
-    }
-
-    let suggestionHtml = '';
-    if (interventionAnalysis.suggestions && interventionAnalysis.suggestions.length) {
-        suggestionHtml = interventionAnalysis.suggestions.map(s => `<li>${s}</li>`).join('');
-    }
-
-    let actionPlanHtml = '';
-    if (interventionAnalysis.action_plan && interventionAnalysis.action_plan.length) {
-        actionPlanHtml = '<h3>📋 改进行动计划</h3><ul>' +
-            interventionAnalysis.action_plan.map(a => `<li>☐ ${a}</li>`).join('') + '</ul>';
-    }
-
-    // R20：关键词策略分类已移除（策略功能由量规证据说明）
-
-    return `
-<h1>📊 教师话语霸凌实训评估报告</h1>
-<p><strong>生成时间:</strong> ${new Date().toLocaleString('zh-CN')}</p>
-
-<h3>📌 霸凌情况</h3>
-<div class="metric"><span>总消息数</span><span class="value">${summary.total_messages || 0}</span></div>
-<div class="metric"><span>攻击性事件</span><span class="value danger">${summary.hostile_messages || 0}次</span></div>
-<div class="metric"><span>最终霸凌强度</span><span class="value ${(summary.bullying_intensity || 0) > 0.5 ? 'danger' : ''}">${Math.round((summary.bullying_intensity || 0) * 100)}%</span></div>
-<div class="metric"><span>受害者压力</span><span class="value ${(summary.victim_distress || 0) > 0.4 ? 'warning' : ''}">${Math.round((summary.victim_distress || 0) * 100)}%</span></div>
-
-<h3>👨‍🏫 教师干预</h3>
-<div class="metric"><span>干预次数</span><span class="value">${summary.intervention_count || 0}</span></div>
-<div class="metric"><span>教师干预质量评分</span><span class="value ${(summary.intervention_effectiveness || 0) >= 50 ? 'good' : 'warning'}">${Math.round(summary.intervention_effectiveness || 0)}/100</span></div>
-
-<h3>📈 指标变化趋势</h3>
-<p>${trends.summary || '数据不足'}</p>
-<p><strong>霸凌强度:</strong> ${Math.round((trends.early_bullying || 0) * 100)}% → ${Math.round((trends.late_bullying || 0) * 100)}%</p>
-<p><strong>受害者压力:</strong> ${Math.round((trends.early_distress || 0) * 100)}% → ${Math.round((trends.late_distress || 0) * 100)}%</p>
-${trends.obvq_trends && trends.obvq_trends.filter(t => obvqStart(t) > 0 || obvqEnd(t) > 0).length > 0 ? `
-<p><strong>六类欺凌类型变化（起点→终点）:</strong></p>
-<table style="width:100%;border-collapse:collapse;font-size:0.8125rem;">
-<tr style="background:#f0f0f0;"><th style="padding:4px 8px;text-align:left;">维度</th><th style="padding:4px 8px;text-align:center;">起点</th><th style="padding:4px 8px;text-align:center;">终点</th><th style="padding:4px 8px;text-align:center;">趋势</th></tr>
-${trends.obvq_trends.filter(t => obvqStart(t) > 0 || obvqEnd(t) > 0).map(t => `<tr style="border-bottom:1px solid #eee;"><td style="padding:3px 8px;">${t.name}</td><td style="padding:3px 8px;text-align:center;">${obvqStart(t)}分</td><td style=\"padding:3px 8px;text-align:center;\">${obvqEnd(t)}分</td><td style="padding:3px 8px;text-align:center;color:${t.direction === 'up' ? '#f44336' : t.direction === 'down' ? '#4CAF50' : '#999'};">${t.direction === 'up' ? '↑' : t.direction === 'down' ? '↓' : '→'}</td></tr>`).join('')}
-</table>` : ''}
-
-<h3>📊 本次模拟欺凌行为类型统计（项目分类）</h3>
-<div class="metric"><span>类型总分（项目分类）</span><span class="value">${obvq.total_score || 0}分</span></div><p style="font-size:0.75rem;color:#888;margin:4px 0;">计分方式：每次识别到的欺凌事件按强度映射为 0–4 分并累加到所有命中类别；总分 = min(80, 六类累计分之和)。同一事件可重复计入多个类别，六类分项之和可能大于总分。该统计用于刻画欺凌行为类型，不用于教师 D1–D7 能力评分。</p>
-${obvqDimsHtml}
-<p><strong>综合建议: </strong>${obvq.recommendation || ''}</p>
-
-<h3>🔍 干预效果分析与建议</h3>
-<p>${interventionAnalysis.summary || '本次模拟未进行任何干预。'}</p>
-${suggestionHtml ? `<ol>${suggestionHtml}</ol>` : ''}
-${actionPlanHtml}
-
-<h3>🎯 能力评估</h3>
-<div class="metric"><span>发现能力</span><span class="value ${assessment.discovery?.level === 'excellent' ? 'good' : assessment.discovery?.level === 'good' ? 'good' : 'warning'}">${assessment.discovery?.description || '未评估'}</span></div>
-<div class="metric"><span>干预能力</span><span class="value ${assessment.intervention?.level === 'excellent' ? 'good' : assessment.intervention?.level === 'good' ? 'good' : 'warning'}">${assessment.intervention?.description || ''}</span></div>
-<div class="metric"><span>受害者保护（D2）</span><span class="value ${(victimProtectionOf(assessment)?.level === 'excellent' ? 'good' : victimProtectionOf(assessment)?.level === 'good' ? 'good' : 'warning')}">${victimProtectionOf(assessment)?.description || '未评估'}</span></div>
-
-<h3>📋 干预详情</h3>
-${(report.interventions && report.interventions.length > 0) ? report.interventions.map(iv => `
-<div class="metric"><span>干预内容</span><span class="value ${(iv.quality_score || 0) >= 50 ? 'good' : 'warning'}">${fmtQualityScore(iv.quality_score)}</span></div>
-<p style="font-size:0.8125rem;color:#666;margin:4px 0;">"${iv.content || ''}"</p>
-`).join('') : '<p>无干预记录</p>'}
-`;
-}function togglePause() {
+function togglePause() {
     if (!state.sessionId || !state.isRunning) return;
 
     state.isPaused = !state.isPaused;
@@ -2116,6 +2190,11 @@ function resetToStart() {
     state.currentRound = 0;
     state.messages = [];
     state.interventions = [];
+    // R26：清空上一会话缓存的报告，避免新会话误渲染/误导出旧报告
+    state.lastReport = null;
+    state.lastReportSessionId = null;
+    // R27：清空 DB 会话ID
+    state.dbSessionId = null;
     // R15：指导门槛状态复位
     state.guidanceEnabled = false;
     state.lastCoaching = null;
@@ -2728,14 +2807,12 @@ function showConvergencePopup(convergence) {
     modal.style.display = 'flex';
 }
 
-async function showReport() {
-    if (!state.sessionId) return;
-
-    try {
-        const report = await apiCall(`/api/session/${state.sessionId}/report`);
-
-        const content = document.getElementById('report-content');
-
+// ============================================================
+// R26：报告统一渲染源 —— 网页查看与下载/导出共用同一份内容
+// buildReportHTML 是报告内容的唯一来源：网页 showReport / viewReport、
+// TXT 下载、PDF 导出、Word 导出全部由它派生，保证「下载与网页一致」。
+// ============================================================
+function buildReportHTML(report) {
         const summary = report.summary || {};
         const metrics = report.metrics || {};
         const assessment = report.ability_assessment || {};
@@ -2753,7 +2830,7 @@ async function showReport() {
             return '&rarr;';
         }
 
-        content.innerHTML = `
+        return `
             <div class="report-section">
                 <h3>📊 霸凌情况</h3>
                 <div class="report-metric">
@@ -3216,6 +3293,18 @@ async function showReport() {
             </div>
             ` : ''}
         `;
+}
+
+async function showReport() {
+    if (!state.sessionId) return;
+
+    try {
+        const report = await apiCall(`/api/session/${state.sessionId}/report`);
+        document.getElementById('report-content').innerHTML = buildReportHTML(report);
+        // R26：缓存网页刚刚渲染的这份报告，导出时原样复用，确保下载内容与网页完全一致
+        // （后端对内存会话每次 /report 都重新生成，报告ID/生成时间/时长会变，不能再次请求）。
+        state.lastReport = report;
+        state.lastReportSessionId = state.sessionId;
 
         // 显示模态框
         document.getElementById('report-modal').classList.add('active');
@@ -4428,10 +4517,8 @@ async function downloadTextReportFromServer() {
 
 // 初始化下载按钮事件监听
 function initDownloadButtons() {
-    const btnDownloadReport = document.getElementById('btn-download-report');
-    if (btnDownloadReport) {
-        btnDownloadReport.addEventListener('click', downloadTextReportFromServer);
-    }
+    // R26：「下载报告」已在主初始化中绑定 downloadTextReport（与网页同源完整版）。
+    // 此处不再重复绑定服务端简略版，避免一次点击触发两个不同内容的下载文件。
 
     const btnDownloadLog = document.getElementById('btn-download-log');
     if (btnDownloadLog) {
