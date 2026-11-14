@@ -5,8 +5,9 @@ Supervisor logic for multi-agent coordination
 from datetime import datetime
 from .state import SharedState, Message, get_termination_params
 from dataclasses import asdict
-from .agents import create_agent, get_decision_messages
-from .llm_client import get_preset_response
+from .agents import create_agent
+from .llm_client import (get_preset_response, build_preset_context, tendency_pool_key,
+                         pick_variant_index)
 from .graph_builder import get_llm_client
 
 import re  # 导入正则表达式模块，用于过滤思考内容
@@ -234,7 +235,8 @@ def _decide_speaking_order(state: SharedState) -> list:
     - 同一角色同一轮不会连续发言
     - 每轮至少3个角色候选（霸凌+受害者+至少1旁观者）
     - 霸凌者或被霸凌者每轮必须有一人入候选队列
-    - 候选执行时由 decide 硬控制是否实际产出，允许自然空轮，不补台词
+    - v2026-11-14：入队候选一律产出一轮台词；规则只决定内容方向与强度，
+      不再缩减人数（人数逻辑与本函数选人规则保持 5626edc 基线，未改动）
     - 霸凌者通常是第一个或主导发言
     - 每个角色应均衡参与，不会连续缺席多轮
     """
@@ -425,16 +427,43 @@ def _unusable_response(response) -> bool:
     return not bare or bare in {"silence", "silent", "沉默", "不发言", "不回应", "不需要回应", "保持沉默", "无言", "不说话"}
 
 
+def _net_len(text) -> int:
+    """去标点净字数（与 5626edc 质量基线的度量口径一致）。"""
+    return len(re.sub(r'[\s\W_]+', '', text or ""))
+
+
+def _speech_present(text) -> bool:
+    """括注之外是否还有可听见的台词（防止『纯动作无台词』蒙混过关）。"""
+    stripped = re.sub(r'[（(][^）)）]*[）)]', '', text or "")
+    return bool(re.sub(r'[\s\W_]+', '', stripped))
+
+
+def _last_other_message(state: SharedState, agent_id: str):
+    for m in reversed(state.messages):
+        if m.sender_id != agent_id and m.content:
+            return m
+    return None
+
+
 def _agent_logic(state: SharedState, agent_id: str,
                  llm_client=_DEFAULT_CLIENT, use_llm: bool = True) -> dict:
-    """候选执行时只决策一次；规则控制行为，LLM 仅表达已选倾向。"""
+    """候选执行时只决策一次；规则只决定内容方向与强度，不再决定发言资格。
+
+    v2026-11-14：删除 should_speak=False 拦截分支——队列里的每个 agent 一律
+    进入生成，发言人数回到 5626edc 基线（每轮 3-4 条），不再出现 0 人轮。
+    决策记录仍保留规则原始判断（rule_decision 内含 should_speak/reasoning/
+    confidence）与 reaction_tendency。
+    v2026-11-14（输出质量修复）：规则块只注入一次且降权；user prompt 复原 5626edc
+    的「只输出一段发言」语义；other_speech 不再截 60 字；恢复 raw/after filter
+    两条 [DEBUG] 日志，并把 raw_len / kept_len / source 写进决策证据。
+    """
     new_queue = [a for a in state.speaking_queue if a != agent_id]
     result = {
         "active_agent": new_queue[0] if new_queue else None,
         "speaking_queue": new_queue,
         "agent_response": None,
     }
-    # 兼容节点重入/补队也不能再次抽样或绕过本轮 False。
+    # 兼容节点重入/补队也不能再次抽样或重复决策。
     if any(d["round"] == state.round and d["agent_id"] == agent_id
            for d in state.decision_log):
         return result
@@ -444,11 +473,16 @@ def _agent_logic(state: SharedState, agent_id: str,
     agent_name = agent.name
     decision = agent.decide(state)
     raw_decision = asdict(decision)
-    # 霸凌者旧规则没有标签，补充生成倾向但不改写原始规则结果。
+    # 人人都有倾向：decide 各分支均已给出；此处仅作防漏网的兜底。
     tendency = decision.reaction_tendency
-    if decision.should_speak and agent_id == "bully" and tendency is None:
-        tendency = "provoke"
-    recent_ids = {id(m) for m in get_decision_messages(state)}
+    if not tendency:
+        tendency = {
+            "bully": "provoke",
+            "victim": "endure_quietly",
+            "bystander_a": "observe_quiet",
+            "bystander_b": "observe_quiet",
+        }.get(agent_id, "observe_quiet")
+    recent_ids = {id(m) for m in state.get_recent_messages(4)}
     evidence = {
         "round": state.round,
         "agent_id": agent_id,
@@ -461,19 +495,37 @@ def _agent_logic(state: SharedState, agent_id: str,
         "rule_decision": raw_decision,
         "reaction_tendency": tendency,
         "produced_message": False,
-        "generation_source": "rule_silent",
+        "generation_source": "pending",
+        "raw_len": 0,
+        "kept_len": 0,
     }
     state.decision_log.append(evidence)
     result["decision_log"] = state.decision_log
-    if not decision.should_speak:
-        return result
 
     if not use_llm:
         llm_client = None
     elif llm_client is _DEFAULT_CLIENT:
         llm_client = get_llm_client()
 
+    # 离线变体池轮转：同会话同「倾向×档」不逐字复读（决策证据记录已用序号）。
+    pool_key = tendency_pool_key(tendency, state.level, agent_id)
+    used_indices = [d.get("variant_index") for d in state.decision_log
+                    if d.get("pool_key") == pool_key and isinstance(d.get("variant_index"), int)]
+    variant_index = pick_variant_index(tendency, state.level, used_indices, agent_id)
+    last_other = _last_other_message(state, agent_id)
+    slot_context = build_preset_context(
+        agent_id=agent_id, level=state.level, agent_name=agent_name,
+        other_name=(last_other.sender_name if last_other else ""),
+        other_content=(last_other.content if last_other else ""),
+        scenario_text=f"{state.scenario_title or ''} {state.scenario_description or ''}",
+    )
+    evidence["pool_key"] = pool_key
+    evidence["variant_index"] = variant_index
+    # 记录槽位上下文，便于事后复现离线变体（也是「为何是这句」的直接证据）。
+    evidence["slot_context"] = dict(slot_context)
+
     source = "preset_offline"
+    raw_text = ""
     response = None
     if llm_client is not None:
         from .prompts import build_system_prompt, build_conversation_context
@@ -491,34 +543,55 @@ def _agent_logic(state: SharedState, agent_id: str,
             reaction_tendency=tendency,
         )
         try:
+            # 本轮已出现的发言：不再截 60 字，模型要能引用/反驳对方原话
             current_round_msgs = [m for m in state.messages if m.round == state.round and m.sender_id != agent_id]
             other_speech = ""
             if current_round_msgs:
                 other_speech = "\n\n【本轮其他角色已说的话】\n" + "\n".join(
-                    f"- {m.sender_name}：{m.content[:60]}" for m in current_round_msgs
+                    f"- {m.sender_name}：{m.content[:240]}" for m in current_round_msgs
                 )
-                other_speech += "\n请结合上述内容表达本轮已选反应，不要重复台词或改变规则决定。"
+                other_speech += "\n请针对上面最相关的一句作出你自己的具体回应，说你自己的一段话，不要照抄、不要重复已出现的台词。"
+            from .prompts import TENDENCY_LABEL_CN
+            tendency_cn = TENDENCY_LABEL_CN.get(tendency, "按本轮规则给定的反应方向")
             response = llm_client.chat([
                 {"role": "system", "content": prompt},
-                {"role": "user", "content": f"请直接表达你作为「{agent_name}」的本轮反应（{tendency}）。{other_speech}\n\n只输出你的一句话、一段发言或可观察的非言语动作，不要输出思考过程或其他角色台词。"},
+                {"role": "user", "content": (
+                    f"请直接说出你作为「{agent_name}」的发言内容（本轮反应方向：{tendency_cn}）。"
+                    f"{other_speech}\n\n"
+                    "重要提醒：只输出你的一段发言，2–4 句连成一段、单段成文，"
+                    "包含动作神态 + 说出口的话 + 对上一条相关发言的具体回应，"
+                    "不要输出思考过程，不要输出其他角色的台词。"
+                )},
             ])
             source = "llm"
-            if _unusable_response(response):
+            # 恢复 5626edc 的两条 [DEBUG]：原始返回 / 过滤后，便于事后量化降级率与腰斩率
+            raw_text = response if isinstance(response, str) else str(response or "")
+            print(f"  [DEBUG] {agent_name} LLM raw: {repr(raw_text[:200])}")
+            evidence["raw_len"] = _net_len(raw_text)
+            if _unusable_response(raw_text):
                 source = "preset_invalid_response"
                 response = None
             else:
-                response = filter_thinking_content(response, agent_name)
+                response = filter_thinking_content(raw_text, agent_name)
+                print(f"  [DEBUG] {agent_name} after filter: {repr(response[:100])}")
+                evidence["kept_len"] = _net_len(response)
                 # 旧过滤器在纯 think 标签被清空时会返还原文，不能当成学生反应。
-                if _unusable_response(response) or re.search(r"</?think\b", response, re.IGNORECASE):
+                if (_unusable_response(response) or re.search(r"</?think\b", response, re.IGNORECASE)
+                        or not _speech_present(response)):
                     source = "preset_filtered_response"
                     response = None
-        except Exception:
-            # 不持久化异常文本或原始提示，以免错误信息泄露配置。
+        except Exception as e:
+            # 只落异常类型名作为摘要（不落 message 文本，避免 base_url/密钥随异常外泄）。
+            evidence["error_type"] = type(e).__name__
+            evidence["error"] = type(e).__name__
+            print(f"  [{agent_name}] LLM error: {type(e).__name__}")
             source = "preset_error"
             response = None
 
     if response is None:
-        response = get_preset_response(agent_id, state.level, reaction_tendency=tendency)
+        response = get_preset_response(agent_id, state.level, reaction_tendency=tendency,
+                                       used=used_indices, context=slot_context)
+        evidence["kept_len"] = _net_len(response)
     evidence["produced_message"] = True
     evidence["generation_source"] = source
     print(f"  [{agent_name}] says: {response[:50]}...")

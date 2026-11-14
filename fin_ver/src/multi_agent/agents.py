@@ -48,24 +48,47 @@ AGENT_ROLE_MAP = {
 @dataclass
 class AgentDecision:
     """Agent决策结果"""
-    should_speak: bool           # 是否应该发言
-    response: str               # 发言内容（如果should_speak=True）
+    should_speak: bool           # 规则原始判断（仅记录证据；自 v2026-11-14 起不再拦截生成）
+    response: str               # 发言内容（保留字段，生成由队列决定）
     reasoning: str              # 决策理由（用于调试）
     confidence: float = 0.5     # 决策置信度
     # R6：行为倾向标签（如 退缩/求助/感谢/反驳/沉默）。约束生成并记录证据，
     # 评估仍识别实际消息内容，不凭标签写入动态状态。
+    # v2026-11-14：规则只决定「往哪个方向说、措辞多严重」，不再决定谁有资格说话，
+    # 因此任何分支都必须给出一个可生成台词的倾向。
     reaction_tendency: Optional[str] = None
 
 
-from dataclasses import dataclass
+# ============================================================
+# 攻击性消息判定（v2026-11-14）
+# 规则退出生成资格后，霸凌者每轮都会发言（道歉/退让/调侃/攻击），
+# 「是否存在攻击事件」必须按台词的反应方向识别，否则道歉也会被当成
+# 攻击、受害者与旁观者会永远困在应激档。旧消息（无 decision 证据，
+# 含手工构造的测试消息）无法判档时沿用旧口径，一律视为攻击消息。
+# ============================================================
+
+_BULLY_COOLDOWN_TENDENCIES = ("provoke", "escalate_severe")
+_BULLY_ATTACK_TENDENCIES = ("provoke", "escalate_severe", "low_intensity_taunt")
 
 
-def get_decision_messages(state: SharedState) -> List[Message]:
-    """规则的近期视图：当前及上一轮内最近四条，空轮也让旧事件过期。
+def _bully_msg_tendency(msg: Message):
+    return (getattr(msg, "decision", None) or {}).get("reaction_tendency")
 
-    首次开场仍由 decide 检查完整历史，不能把过期后的空窗口当作新会话。
-    """
-    return [m for m in state.messages if state.round - 1 <= m.round <= state.round][-4:]
+
+def is_bully_attack_message(msg: Message) -> bool:
+    """霸凌者的攻击性台词（嘲讽/升级/轻度挑衅）；道歉、退让不算攻击。"""
+    if msg.sender_id != "bully" or msg.content in ("沉默", ""):
+        return False
+    tendency = _bully_msg_tendency(msg)
+    return tendency is None or tendency in _BULLY_ATTACK_TENDENCIES
+
+
+def is_bully_cooldown_message(msg: Message) -> bool:
+    """触发霸凌者「刚攻击过」冷却的台词（调侃/道歉不延长自身冷却）。"""
+    if msg.sender_id != "bully" or msg.content in ("沉默", ""):
+        return False
+    tendency = _bully_msg_tendency(msg)
+    return tendency is None or tendency in _BULLY_COOLDOWN_TENDENCIES
 
 
 # ============================================================
@@ -168,9 +191,14 @@ class BullyAgent(BaseAgent):
              K_D1/K_D3 = K(D1)/K(D3) 干预维度分映射,
              Nb = bystander_support。
         严重风险/即时威胁优先于概率公式（不被随机数绕过）。
+
+        v2026-11-14：概率公式、阈值与强制条件一个都不改；只把出口语义从
+        「是否发言」改为「往哪说」——低攻击概率/收敛 → apologize/back_off（倾向
+        道歉而不是继续攻击），高强度攻击 → escalate_severe（措辞明显更严重），
+        冷却 → low_intensity_taunt（半开玩笑）。should_speak 仅作原始规则证据保留。
         """
         import random
-        recent = get_decision_messages(state)
+        recent = state.get_recent_messages(4)
 
         # 首轮发言：主动发起挑衅（检查是否只有系统消息）
         if not state.messages or all(m.sender_id == "system" for m in state.messages):
@@ -179,17 +207,15 @@ class BullyAgent(BaseAgent):
                 response="",
                 reasoning="首轮发言，主动发起挑衅",
                 confidence=0.9,
+                reaction_tendency="provoke",
             )
 
         # 检查是否有干预
         intervention_msgs = [m for m in recent if m.sender_id == "teacher"]
         has_intervention = len(intervention_msgs) > 0
 
-        # 检查是否刚攻击过（冷却：不连续攻击）
-        recent_attacks = [
-            m for m in recent
-            if m.sender_id == "bully" and m.content not in ("沉默", "")
-        ]
+        # 检查是否刚攻击过（冷却：只统计真正的攻击性台词，调侃/道歉不自我锁定）
+        recent_attacks = [m for m in recent if is_bully_cooldown_message(m)]
         just_attacked = len(recent_attacks) > 0
 
         # ---- 内部状态（0-1）----
@@ -235,24 +261,35 @@ class BullyAgent(BaseAgent):
 
         should_speak = False
         reasoning = "当前不需要发言"
+        tendency = "provoke"
+
+        def _attack_tendency():
+            # 高强度时措辞明显更严重（escalate_severe），仍受安全红线约束
+            return "escalate_severe" if state.bullying_intensity > 0.7 else "provoke"
 
         if force_attack:
             should_speak = True
+            tendency = "escalate_severe"
             reasoning = f"高风险干预({risk_level})，霸凌者升级（p_attack={p_attack:.2f}）"
         elif has_intervention:
             # 有干预：按概率决定是否继续挑衅
             if p_attack < 0.35:
-                should_speak = False
+                tendency = "apologize"
                 reasoning = f"高质量干预（K_D1={K_D1:.2f}），收敛（p_attack={p_attack:.2f}）"
             else:
                 should_speak = random.random() < p_attack
+                tendency = _attack_tendency() if should_speak else "back_off"
                 reasoning = f"干预后攻击概率 p_attack={p_attack:.2f}"
         elif just_attacked:
-            should_speak = False
+            tendency = "low_intensity_taunt"
             reasoning = "刚攻击过，让对话继续发展"
         else:
             # 无干预：按概率发起/继续攻击
             should_speak = random.random() < p_attack
+            if should_speak:
+                tendency = _attack_tendency()
+            else:
+                tendency = "apologize" if p_attack < 0.35 else "back_off"
             reasoning = f"无干预，攻击概率 p_attack={p_attack:.2f}"
 
         return AgentDecision(
@@ -260,6 +297,7 @@ class BullyAgent(BaseAgent):
             response="",
             reasoning=reasoning,
             confidence=round(p_attack, 2),
+            reaction_tendency=tendency,
         )
 
 
@@ -280,11 +318,13 @@ class VictimAgent(BaseAgent):
         应产生可区分的反应倾向）：
         - 被攻击后 → 退缩/哭泣/自我否定；报复风险高且保护不足时更倾向沉默
         - 被关心时 → 意外/感谢；安全感不足时仍带担忧
-        - 高压力时 → 可能完全沉默
+        - 高压力时 → 痛苦反应（哭泣/退缩）
         - 低压力时 → 可能小声反驳
+        - 冷却/无事件 → endure_quietly：低头不语的**非言语台词**（不再是缺席）。
+        v2026-11-14：所有分支都返回可生成台词的倾向；should_speak 仅作原始规则证据。
         输出 reaction_tendency 供事件识别使用，不直接写状态。
         """
-        recent = get_decision_messages(state)
+        recent = state.get_recent_messages(4)
 
         # 检查是否刚发言过（冷却机制）
         recent_self = [
@@ -293,10 +333,8 @@ class VictimAgent(BaseAgent):
         ]
         just_spoke = len(recent_self) >= 1
 
-        # 检查是否被攻击
-        is_attacked = any(
-            m.sender_id == "bully" for m in recent
-        )
+        # 检查是否被攻击（按台词反应方向识别；霸凌者道歉/退让不算攻击事件）
+        is_attacked = any(is_bully_attack_message(m) for m in recent)
 
         # 检查是否被关心（最近支持事件：同伴支持或教师介入）
         is_supported = any(
@@ -316,17 +354,13 @@ class VictimAgent(BaseAgent):
             self.name in m.content for m in recent
         )
 
-        # 决策
+        # 决策（v2026-11-14：事件优先于冷却——被攻击/被关心/被点名各档不变，
+        # 冷却与无事件都落到 endure_quietly，人人仍产出台词）
         should_speak = False
         reasoning = "当前不需要发言"
         tendency = None
 
-        # 冷却机制：刚发言过就不再发言
-        if just_spoke:
-            should_speak = False
-            reasoning = "刚发言过，等待他人回应"
-            tendency = "wait"
-        elif is_attacked:
+        if is_attacked:
             # 被攻击后的反应取决于压力 + 安全 + 报复风险
             if retaliation >= 0.5 and safety < 0.5:
                 # R6：风险优先——不被安全感抵消
@@ -367,6 +401,16 @@ class VictimAgent(BaseAgent):
             tendency = "respond_cautious" if recent_risky else "respond"
             reasoning = "被点名，需要回应"
 
+        elif just_spoke:
+            # 冷却机制：刚发言过 → 仍发言，但转向低头不语的非言语描写（endure_quietly）
+            reasoning = "刚发言过，等待他人回应"
+            tendency = "endure_quietly"
+
+        else:
+            # 无触发事件：仍发言，低头不语/轻描淡写的等待性描写
+            tendency = "endure_quietly"
+            reasoning = "无触发事件，安静等待"
+
         return AgentDecision(
             should_speak=should_speak,
             response="",
@@ -392,12 +436,14 @@ class BystanderAAgent(BaseAgent):
         - 看到攻击性言行 → 考虑干预
         - 受害者明显受伤 → 主动干预
         - 严重霸凌 → 强烈干预或报告老师
-        - 高干预冷却 → 暂时观察
+        - 高干预冷却 → wait_observe：仍发言，表达观望与等待
+        - 本轮无攻击 → observe_quiet：日常旁观台词
+        v2026-11-14：所有分支都返回可生成台词的倾向；should_speak 仅作原始规则证据。
         """
-        recent = get_decision_messages(state)
+        recent = state.get_recent_messages(4)
 
-        # 检查是否有攻击
-        has_attack = any(m.sender_id == "bully" for m in recent)
+        # 检查是否有攻击（按台词反应方向识别）
+        has_attack = any(is_bully_attack_message(m) for m in recent)
 
         # 检查受害者是否受伤
         victim_distressed = any(
@@ -422,12 +468,7 @@ class BystanderAAgent(BaseAgent):
         support_norm = getattr(state, 'bystander_support', 0.0)
         retaliation = getattr(state, 'retaliation_risk', 0.0)
 
-        if just_intervened:
-            should_speak = False
-            reasoning = "刚干预过，给对话一些时间"
-            tendency = "wait"
-
-        elif has_attack:
+        if has_attack:
             should_speak = True
             if retaliation >= 0.5 and support_norm < 0.3:
                 # R6：担心报复且群体支持不足 → 倾向观望而非介入
@@ -446,6 +487,16 @@ class BystanderAAgent(BaseAgent):
             else:
                 tendency = "mild_reminder"
                 reasoning = "检测到轻微攻击，温和提醒"
+
+        elif just_intervened:
+            # 冷却：仍发言，但表达观望与等待（不再缺席）
+            reasoning = "刚干预过，给对话一些时间"
+            tendency = "wait_observe"
+
+        else:
+            # 本轮无攻击：日常旁观台词，不再缺席
+            tendency = "observe_quiet"
+            reasoning = "本轮无攻击，日常旁观"
 
         return AgentDecision(
             should_speak=should_speak,
@@ -469,15 +520,16 @@ class BystanderBAgent(BaseAgent):
     def decide(self, state: SharedState) -> AgentDecision:
         """
         从众旁观者决策逻辑：
-        - 多数人沉默 → 沉默
+        - 多数人沉默 → 观望（observe_quiet，仍有台词）
         - 多数人攻击 → 可能附和
         - 感觉太过分 → 小声嘀咕
-        - 看到老师 → 停止附和
+        - 看到老师 → avoid：不敢吱声、回避（不再必沉默缺席）
+        v2026-11-14：所有分支都返回可生成台词的倾向；should_speak 仅作原始规则证据。
         """
-        recent = get_decision_messages(state)
+        recent = state.get_recent_messages(4)
 
-        # 统计最近发言
-        bully_count = sum(1 for m in recent if m.sender_id == "bully")
+        # 统计最近发言（霸凌消息按反应方向识别：道歉/退让不计入「攻击」）
+        bully_count = sum(1 for m in recent if is_bully_attack_message(m))
         bystander_a_count = sum(1 for m in recent if m.sender_id == "bystander_a")
         bystander_b_count = sum(1 for m in recent if m.sender_id == "bystander_b")
 
@@ -491,7 +543,7 @@ class BystanderBAgent(BaseAgent):
         ]
         just_spoke = len(recent_self) >= 1
 
-        # 决策
+        # 决策（v2026-11-14：事件优先于冷却——冷却只影响方向、不再造成 wait 常驻）
         should_speak = False
         reasoning = "当前不需要发言"
         tendency = None
@@ -501,14 +553,8 @@ class BystanderBAgent(BaseAgent):
         retaliation = getattr(state, 'retaliation_risk', 0.0)
 
         if has_teacher:
-            should_speak = False
-            reasoning = "老师在场，保持沉默"
-            tendency = "silence"
-
-        elif just_spoke:
-            should_speak = False
-            reasoning = "刚发言过，轮换观察"
-            tendency = "wait"
+            reasoning = "老师在场，不敢吱声、回避"
+            tendency = "avoid"
 
         elif bystander_a_count > 0 and state.bullying_intensity > 0.4:
             # 正义旁观者已经发声 + 霸凌强度高
@@ -520,11 +566,11 @@ class BystanderBAgent(BaseAgent):
         elif bully_count >= 2 and bystander_b_count == 0:
             # 多人攻击 + 从众者还没附和
             if support_norm >= 0.4:
-                # R6：群体规范已被激活 → 抵抗从众
+                # R6：群体规范已被激活 → 抵抗从众（现在正常发言，倾向入词表）
                 tendency = "resist_follow"
                 reasoning = "多人攻击，但群体支持规范已建立，倾向不附和"
             elif retaliation >= 0.5:
-                # R6：担心报复 → 不附和但保持沉默
+                # R6：担心报复 → 不附和（非言语回避台词）
                 tendency = "silent_resist"
                 reasoning = "多人攻击，但担心报复风险，倾向保持沉默"
             elif state.bullying_intensity > 0.5:
@@ -541,6 +587,15 @@ class BystanderBAgent(BaseAgent):
             should_speak = True
             tendency = "support_justice"
             reasoning = "正义旁观者已干预，表示支持"
+
+        elif just_spoke:
+            reasoning = "刚发言过，轮换观察"
+            tendency = "wait_observe"
+
+        else:
+            # 多数人沉默/无事件：仍发言，日常观望嘀咕
+            tendency = "observe_quiet"
+            reasoning = "无明确站队信号，日常观望"
 
         return AgentDecision(
             should_speak=should_speak,

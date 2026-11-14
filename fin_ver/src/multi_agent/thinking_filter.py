@@ -32,10 +32,20 @@ ANALYSIS_PATTERNS = [
 # 明确是角色对话的标点特征
 DIALOGUE_MARKERS = re.compile(r'[""''「」『』《》（()）]')
 
+# 第二人称/称呼：没有括注也像「当面对人说出口的话」，用于合并被空行拆开的台词
+_ADDRESSEE = re.compile(r'你|您|咱们|大家|各位|老师|同学')
+
 # 思考标签
-THINK_TAG = re.compile(r'<think[^>]*>[\s\S]*?</think[^>]*>', re.IGNORECASE)
-THINK_TAG_OPEN = re.compile(r'<think[^>]*>[^\n]*\n?', re.IGNORECASE)
-THINK_TAG_REMNANT = re.compile(r'</?think[^>]*>', re.IGNORECASE)
+# v2026-11-14（think 剥离回归修复）：标签族扩到 think / thinking / reasoning（含 thought(s)
+# 变体），配对块整体删除，未闭合的开标签删到行尾，残留闭合标记单独清除。
+# 剥离必须发生在分段合并之前，否则推理文本会随"多段台词合并"泄进最终台词。
+_THINK_TAG_NAME = r'think(?:ing|s)?|thought(?:s)?|reasoning(?:_content)?|reason'
+THINK_TAG = re.compile(
+    r'<(?:' + _THINK_TAG_NAME + r')\b[^>]*>[\s\S]*?</(?:' + _THINK_TAG_NAME + r')\b[^>]*>',
+    re.IGNORECASE,
+)
+THINK_TAG_OPEN = re.compile(r'<(?:' + _THINK_TAG_NAME + r')\b[^>]*>[^\n]*\n?', re.IGNORECASE)
+THINK_TAG_REMNANT = re.compile(r'</?(?:' + _THINK_TAG_NAME + r')\b[^>]*>', re.IGNORECASE)
 
 # 纯思考前缀（行首）
 THINKING_LINE = re.compile(
@@ -80,10 +90,14 @@ def extract_dialogue_only(text: str, agent_name: str = '') -> str:
     从 LLM 输出中提取纯对话内容，移除思考过程。
 
     策略（按优先级）：
-    1. 清除 <think> 标签块
-    2. 清除模型格式残留（<|im_start|> 等）
-    3. 分段 → 对每段打分 → 选最高分段落（不是简单取最后一段）
+    1. 清除 think / thinking / reasoning 标签块（连同内容），先剥离再分段合并
+    2. 清除模型格式残留（im_start / im_end 等）
+    3. 分段 → 对每段打分 → 合并全部合格的角色发言段（不是简单取最后一段）
     4. 对选中段落做内联清理
+
+    返回空串的含义：整条消息只有推理/思考内容，没有任何可说出口的台词。
+    调用方（supervisor._agent_logic）据此走 preset_filtered_response 降级到预设，
+    不能把原文回吐——回吐会把推理文本当台词泄进对话（v2026-11-14 回归）。
     """
     if not text or not text.strip():
         return text
@@ -91,7 +105,7 @@ def extract_dialogue_only(text: str, agent_name: str = '') -> str:
     original = text.strip()
     text = original.replace('\r\n', '\n').replace('\r', '\n')
 
-    # ── Phase 1: 标签清除 ──
+    # ── Phase 1: 标签清除（必须先于分段合并）──
     text = THINK_TAG.sub('', text)
     text = THINK_TAG_OPEN.sub('', text)
     text = THINK_TAG_REMNANT.sub('', text)
@@ -100,7 +114,8 @@ def extract_dialogue_only(text: str, agent_name: str = '') -> str:
     text = text.strip()
 
     if not text:
-        return original
+        # 整条消息只有推理块 / 格式残留 → 明确返回空串，让调用方降级到预设。
+        return ''
 
     # ── Phase 2: 按空行分段 ──
     paragraphs = [p.strip() for p in re.split(r'\n\s*\n', text) if p.strip()]
@@ -111,18 +126,51 @@ def extract_dialogue_only(text: str, agent_name: str = '') -> str:
     if len(paragraphs) == 1:
         return _clean_single_paragraph(paragraphs[0], agent_name)
 
-    # ── Phase 3: 给每段打分，选最优段落 ──
+    # ── Phase 3: 给每段打分，保留全部合格的角色发言段 ──
+    # v2026-11-14（输出质量修复）：旧实现多段时只取最高分一段，实测把 66 字压到 18 字
+    # （-72.7%）。现在合并全部"像台词"的段落（按原顺序、去重），思考/推理段仍被剥离。
     scored = [(p, _dialogue_score(p)) for p in paragraphs]
 
-    # 如果存在得分 > 2 的高质量对话段，优先选第一个高分
-    for p, score in scored:
-        if score >= 3:
-            return _clean_single_paragraph(p, agent_name)
+    def _collect(threshold):
+        kept, seen_norm = [], set()
+        for p, score in scored:
+            if score < threshold:
+                continue
+            cleaned = _clean_single_paragraph(p, agent_name)
+            if not cleaned or not cleaned.strip():
+                continue
+            norm = re.sub(r'\s+', '', cleaned)
+            if norm in seen_norm:
+                continue
+            seen_norm.add(norm)
+            kept.append(cleaned)
+        return kept
 
-    # 否则选得分最高的段落
-    best = max(scored, key=lambda x: x[1])
-    if best[1] >= 0:
-        return _clean_single_paragraph(best[0], agent_name)
+    def _is_line_start(p):
+        return any(p.startswith(prefix) for prefix in THINKING_PREFIXES)
+
+    def _collect_conversational(p):
+        """合格台词：强信号段，或带第二人称对象感的中文对话段（不含思考前缀开头）。"""
+        score = _dialogue_score(p)
+        if score >= 3:
+            return True
+        return score >= 2 and bool(_ADDRESSEE.search(p)) and not _is_line_start(p)
+
+    kept, seen_norm = [], set()
+    for p in paragraphs:
+        if not _collect_conversational(p):
+            continue
+        cleaned = _clean_single_paragraph(p, agent_name)
+        if not cleaned or not cleaned.strip():
+            continue
+        norm = re.sub(r'\s+', '', cleaned)
+        if norm in seen_norm:
+            continue
+        seen_norm.add(norm)
+        kept.append(cleaned)
+    merged = kept or _collect(1) or _collect(0)
+    if merged:
+        return "\n\n".join(merged)
 
     # 所有段都像分析 → 取最后一段兜底
     return _clean_single_paragraph(paragraphs[-1], agent_name)

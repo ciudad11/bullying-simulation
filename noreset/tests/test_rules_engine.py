@@ -427,7 +427,7 @@ def t_victim_agent_state_aware():
     a.victim_safety = 0.8
     a.retaliation_risk = 0.1
     a.messages = [msg("bully", "你这个废物真蠢", 1, name="陈浩")]
-    a.round = 1  # 规则窗口只读取当前及上一轮，测试消息必须已发生
+    a.round = 1  # 规则窗口取最近 4 条消息（5626edc 基线口径），测试消息须已发生
     b = make_state()
     b.victim_distress = 0.5
     b.victim_safety = 0.2
