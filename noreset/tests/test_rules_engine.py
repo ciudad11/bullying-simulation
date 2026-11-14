@@ -427,11 +427,13 @@ def t_victim_agent_state_aware():
     a.victim_safety = 0.8
     a.retaliation_risk = 0.1
     a.messages = [msg("bully", "你这个废物真蠢", 1, name="陈浩")]
+    a.round = 1  # 规则窗口只读取当前及上一轮，测试消息必须已发生
     b = make_state()
     b.victim_distress = 0.5
     b.victim_safety = 0.2
     b.retaliation_risk = 0.6
     b.messages = [msg("bully", "你这个废物真蠢", 1, name="陈浩")]
+    b.round = 1
     da = VictimAgent("victim", llm_client=None, use_llm=False).decide(a)
     db = VictimAgent("victim", llm_client=None, use_llm=False).decide(b)
     assert da.reaction_tendency != db.reaction_tendency, (da.reaction_tendency, db.reaction_tendency)
@@ -447,6 +449,7 @@ def t_bystander_agent_state_aware():
     b.retaliation_risk = 0.7
     for st in (a, b):
         st.messages = [msg("bully", "你们看他的样子真蠢", 1, name="陈浩")]
+        st.round = 1
     da = BystanderAAgent("bystander_a", llm_client=None, use_llm=False).decide(a)
     db = BystanderAAgent("bystander_a", llm_client=None, use_llm=False).decide(b)
     assert da.reaction_tendency != db.reaction_tendency, (da.reaction_tendency, db.reaction_tendency)
@@ -455,12 +458,14 @@ def t_bystander_agent_state_aware():
 @test("§9.1 霸凌者不再因总分阈值必然沉默，改用 p_attack 概率")
 def t_bully_probability():
     st = make_state()
+    st.round = 1
     st.messages = [msg("victim", "我没事", 1)]
     st.last_intervention_dimensions = {"D1": 90, "D2": 80, "D3": 70, "D4": 90}
     st.immediate_stop_residual = 0.0
     d = BullyAgent("bully", llm_client=None, use_llm=False).decide(st)
     assert "p_attack=" in d.reasoning, d.reasoning
     st2 = make_state()
+    st2.round = 1
     st2.messages = [msg("victim", "我没事", 1)]
     st2.last_intervention_dimensions = {"D1": 90, "D2": 80, "D3": 70, "D4": 90}
     st2.immediate_stop_residual = 0.0

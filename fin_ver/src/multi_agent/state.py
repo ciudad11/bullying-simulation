@@ -24,6 +24,7 @@ class Message:
     hostile_score: float = 0.0
     supportive_score: float = 0.0
     emotions: List[str] = field(default_factory=list)
+    decision: Dict = field(default_factory=dict)  # 行为证据，不作为评估事件
 
     def to_dict(self) -> dict:
         return {
@@ -36,6 +37,7 @@ class Message:
             "hostile_score": self.hostile_score,
             "supportive_score": self.supportive_score,
             "emotions": self.emotions,
+            "decision": self.decision,
         }
 
     @staticmethod
@@ -50,6 +52,7 @@ class Message:
             hostile_score=d.get("hostile_score", 0.0),
             supportive_score=d.get("supportive_score", 0.0),
             emotions=d.get("emotions", []),
+            decision=d.get("decision", {}),
         )
 
 
@@ -322,6 +325,7 @@ class SharedState:
 
     # ----- 对话历史 -----
     messages: List[Message] = field(default_factory=list)
+    decision_log: List[Dict] = field(default_factory=list)  # 仅记录实际执行的候选
 
     # ----- 轮次控制 -----
     round: int = 0
@@ -499,6 +503,14 @@ class SharedState:
             "remaining_to_stop": remaining,
         }
 
+    def get_decision_status(self) -> dict:
+        """本轮候选行为证据；未入队角色不推断为拒绝发言。"""
+        decisions = [d for d in self.decision_log if d["round"] == self.round]
+        return {
+            "decisions": decisions,
+            "empty_round": bool(decisions) and not any(d["produced_message"] for d in decisions),
+        }
+
     def to_summary_dict(self) -> dict:
         """用于Web界面的简洁状态摘要"""
         obvq_info = self.obvq_state.get_score_info()
@@ -519,6 +531,7 @@ class SharedState:
             "termination_reason": self.termination_reason,
             "result_type": self.result_type,
             "active_agent": self.active_agent,
+            **self.get_decision_status(),
             # 自动结束判定诊断字段（§1：隐藏门槛必须可回显）
             **self.get_auto_end_status(),
             # OBVQ 字段（仅得分）
@@ -634,4 +647,5 @@ def message_to_display(msg: Message) -> dict:
         "content": msg.content,
         "timestamp": msg.timestamp,
         "round": msg.round,
+        "decision": msg.decision,
     }

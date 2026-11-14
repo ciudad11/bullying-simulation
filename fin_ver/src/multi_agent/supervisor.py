@@ -4,7 +4,8 @@ Supervisor logic for multi-agent coordination
 
 from datetime import datetime
 from .state import SharedState, Message, get_termination_params
-from .agents import create_all_agents, AgentDecision
+from dataclasses import asdict
+from .agents import create_agent, get_decision_messages
 from .llm_client import get_preset_response
 from .graph_builder import get_llm_client
 
@@ -76,6 +77,9 @@ def _supervisor_logic(state: SharedState) -> dict:
     # Decide speaking order
     speaking_queue = _decide_speaking_order(state)
     state.speaking_queue = speaking_queue
+    # StepRunner 不合并 supervisor 的返回值，路由状态必须同步原地更新。
+    state.active_agent = speaking_queue[0] if speaking_queue else None
+    state.agent_response = None
 
     names = [state.agent_memories[a].name for a in speaking_queue]
     print(f"  Speaking order: {names}")
@@ -228,8 +232,9 @@ def _decide_speaking_order(state: SharedState) -> list:
 
     约束：
     - 同一角色同一轮不会连续发言
-    - 每轮至少3个角色参与（霸凌+受害者+至少1旁观者）
-    - 霸凌者或被霸凌者每轮必须有一人参与
+    - 每轮至少3个角色候选（霸凌+受害者+至少1旁观者）
+    - 霸凌者或被霸凌者每轮必须有一人入候选队列
+    - 候选执行时由 decide 硬控制是否实际产出，允许自然空轮，不补台词
     - 霸凌者通常是第一个或主导发言
     - 每个角色应均衡参与，不会连续缺席多轮
     """
@@ -407,16 +412,70 @@ def _route_to_agents(state: SharedState) -> str:
 # Agent node logic - 增强版思考内容过滤
 # ============================================================
 
-def _agent_logic(state: SharedState, agent_id: str) -> dict:
-    """Execute agent response with enhanced thinking filter"""
-    info = _get_agent_info(getattr(state, 'role_map', None)).get(agent_id, {"name_cn": agent_id})
-    agent_name = info["name_cn"]
+# 不传 client 的兼容节点仍使用全局；显式 None 必须保持离线。
+_DEFAULT_CLIENT = object()
 
-    llm_client = get_llm_client()
 
-    if llm_client is None:
-        response = get_preset_response(agent_id, state.level)
-    else:
+def _unusable_response(response) -> bool:
+    if not isinstance(response, str) or not response.strip():
+        return True
+    if "LLM暂时不可用" in response:
+        return True
+    bare = re.sub(r'[\s\W_]+', '', response).lower()
+    return not bare or bare in {"silence", "silent", "沉默", "不发言", "不回应", "不需要回应", "保持沉默", "无言", "不说话"}
+
+
+def _agent_logic(state: SharedState, agent_id: str,
+                 llm_client=_DEFAULT_CLIENT, use_llm: bool = True) -> dict:
+    """候选执行时只决策一次；规则控制行为，LLM 仅表达已选倾向。"""
+    new_queue = [a for a in state.speaking_queue if a != agent_id]
+    result = {
+        "active_agent": new_queue[0] if new_queue else None,
+        "speaking_queue": new_queue,
+        "agent_response": None,
+    }
+    # 兼容节点重入/补队也不能再次抽样或绕过本轮 False。
+    if any(d["round"] == state.round and d["agent_id"] == agent_id
+           for d in state.decision_log):
+        return result
+
+    agent = create_agent(agent_id, llm_client=None, use_llm=False)
+    agent.name = _get_agent_info(state.role_map)[agent_id]["name_cn"]
+    agent_name = agent.name
+    decision = agent.decide(state)
+    raw_decision = asdict(decision)
+    # 霸凌者旧规则没有标签，补充生成倾向但不改写原始规则结果。
+    tendency = decision.reaction_tendency
+    if decision.should_speak and agent_id == "bully" and tendency is None:
+        tendency = "provoke"
+    recent_ids = {id(m) for m in get_decision_messages(state)}
+    evidence = {
+        "round": state.round,
+        "agent_id": agent_id,
+        "name": agent_name,
+        "input_window": [
+            {"message_index": i, "sender_id": m.sender_id, "round": m.round}
+            for i, m in enumerate(state.messages) if id(m) in recent_ids
+        ],
+        "history_message_count": len(state.messages),
+        "rule_decision": raw_decision,
+        "reaction_tendency": tendency,
+        "produced_message": False,
+        "generation_source": "rule_silent",
+    }
+    state.decision_log.append(evidence)
+    result["decision_log"] = state.decision_log
+    if not decision.should_speak:
+        return result
+
+    if not use_llm:
+        llm_client = None
+    elif llm_client is _DEFAULT_CLIENT:
+        llm_client = get_llm_client()
+
+    source = "preset_offline"
+    response = None
+    if llm_client is not None:
         from .prompts import build_system_prompt, build_conversation_context
         msg_dicts = [m.to_dict() for m in state.get_recent_messages(6)]
         context = build_conversation_context(msg_dicts)
@@ -424,55 +483,44 @@ def _agent_logic(state: SharedState, agent_id: str) -> dict:
             agent_id, state.level, context,
             scenario_title=state.scenario_title,
             scenario_description=state.scenario_description,
-            role_map=getattr(state, 'role_map', None),
+            role_map=state.role_map,
             round_num=state.round,
             bullying_intensity=state.bullying_intensity,
             victim_distress=state.victim_distress,
+            decision=raw_decision,
+            reaction_tendency=tendency,
         )
-
         try:
-            # 构建本轮已有的发言（避免重复）
             current_round_msgs = [m for m in state.messages if m.round == state.round and m.sender_id != agent_id]
             other_speech = ""
             if current_round_msgs:
                 other_speech = "\n\n【本轮其他角色已说的话】\n" + "\n".join(
-                    f"- {m.sender_name}：{m.content[:60]}"
-                    for m in current_round_msgs
+                    f"- {m.sender_name}：{m.content[:60]}" for m in current_round_msgs
                 )
-                other_speech += "\n\n注意：你不需要回应或重复上述内容，只需说出你自己的新发言。"
-
-            # 强调不要输出思考过程和其他角色台词
+                other_speech += "\n请结合上述内容表达本轮已选反应，不要重复台词或改变规则决定。"
             response = llm_client.chat([
                 {"role": "system", "content": prompt},
-                {"role": "user", "content": f"请直接说出你作为「{agent_name}」的发言内容。{other_speech}\n\n重要提醒：只输出你的一句话或一段发言，不要输出思考过程，不要输出其他角色的台词。"},
+                {"role": "user", "content": f"请直接表达你作为「{agent_name}」的本轮反应（{tendency}）。{other_speech}\n\n只输出你的一句话、一段发言或可观察的非言语动作，不要输出思考过程或其他角色台词。"},
             ])
-            
-            # DEBUG: 打印LLM原始输出
-            print(f"  [DEBUG] {agent_name} LLM raw: {repr(response[:200])}")
-            
-            # 使用专门的过滤器处理思考内容
-            response = filter_thinking_content(response, agent_name)
-            
-            # 如果过滤器将内容全部移除，使用预设回复兜底（防御性处理）
-            if not response or not response.strip():
-                print(f"  [{agent_name}] filter produced empty, using preset fallback")
-                response = get_preset_response(agent_id, state.level)
-            
-            print(f"  [DEBUG] {agent_name} after filter: {repr(response[:100])}")
-            
-        except Exception as e:
-            print(f"  [{agent_name}] LLM error: {e}")
-            response = get_preset_response(agent_id, state.level)
+            source = "llm"
+            if _unusable_response(response):
+                source = "preset_invalid_response"
+                response = None
+            else:
+                response = filter_thinking_content(response, agent_name)
+                # 旧过滤器在纯 think 标签被清空时会返还原文，不能当成学生反应。
+                if _unusable_response(response) or re.search(r"</?think\b", response, re.IGNORECASE):
+                    source = "preset_filtered_response"
+                    response = None
+        except Exception:
+            # 不持久化异常文本或原始提示，以免错误信息泄露配置。
+            source = "preset_error"
+            response = None
 
-    # 处理沉默
-    if response == "Silence" or response == "沉默" or not response.strip():
-        print(f"  [{agent_name}] is silent")
-        new_queue = [a for a in state.speaking_queue if a != agent_id]
-        return {
-            "active_agent": new_queue[0] if new_queue else None,
-            "speaking_queue": new_queue,
-        }
-
+    if response is None:
+        response = get_preset_response(agent_id, state.level, reaction_tendency=tendency)
+    evidence["produced_message"] = True
+    evidence["generation_source"] = source
     print(f"  [{agent_name}] says: {response[:50]}...")
 
     msg = Message(
@@ -482,6 +530,7 @@ def _agent_logic(state: SharedState, agent_id: str) -> dict:
         content=response,
         timestamp=datetime.now().strftime("%H:%M:%S"),
         round=state.round,
+        decision=dict(evidence),
     )
 
     # 更新记忆
@@ -500,16 +549,12 @@ def _agent_logic(state: SharedState, agent_id: str) -> dict:
                     "mood": emotions[0],
                 })
 
-    # 从队列中移除
-    new_queue = [a for a in state.speaking_queue if a != agent_id]
-
-    return {
-        "messages": state.messages + [msg], 
+    result.update({
+        "messages": state.messages + [msg],
         "pending_messages": state.pending_messages + [msg],
-        "active_agent": new_queue[0] if new_queue else None,
-        "speaking_queue": new_queue,
         "agent_response": response,
-    }
+    })
+    return result
 
 
 # ============================================================

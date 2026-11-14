@@ -323,8 +323,34 @@ PRESET_RESPONSES = {
 }
 
 
-def get_preset_response(agent_id: str, level: int) -> str:
-    """获取预设回复"""
+# 规则已选择行为时使用确定性表达，不再随机选择另一种行为。
+TENDENCY_RESPONSES = {
+    "provoke": "（带着嘲讽的语气）就你这样，还觉得自己很了不起啊？",
+    "silence_fear": "（害怕地缩起肩膀，避开视线，攥紧衣角，不敢说出发生的事）",
+    "withdraw_cry": "（忍不住哭泣，往后缩）求你别再这样说我了……",
+    "withdraw": "（低下头，退到一旁）我……我不说了。",
+    "seek_help": "我想把刚才被欺负的情况说出来，请帮帮我。",
+    "weak_protest": "（小声）我没有做错，请别这样说我。",
+    "thank_worried": "谢谢你帮我，可我还是害怕之后会被报复……",
+    "thank_relieved": "谢谢你愿意帮我，我现在安心一些了。",
+    "respond_cautious": "（警惕地看了看周围）你在叫我吗？我有些不敢说……",
+    "respond": "（抬起头）你叫我吗？我在听。",
+    "report_teacher": "立刻停止欺负同学！我要把这件事报告老师，请老师来保护同学。",
+    "support_victim": "别再欺负同学了。这不是你的错，我陪着你。",
+    "mild_reminder": "这样说不太合适，别取笑同学了。",
+    "follow_majority": "（跟着起哄，小声附和）就是啊，有什么了不起的。",
+    "support_justice": "说得对，不应该欺负同学，我也支持制止。",
+}
+
+
+def get_preset_response(agent_id: str, level: int, reaction_tendency: str = None) -> str:
+    """获取预设回复；传入倾向时只表达已选行为，旧调用仍按等级取预设。"""
+    if reaction_tendency == "hesitate":
+        if agent_id == "bystander_a":
+            return "（想上前又停住，担心被报复，犹豫地观察着）"
+        return "（犹豫地小声说）还是别这样了，我觉得刚才制止得对……"
+    if reaction_tendency in TENDENCY_RESPONSES:
+        return TENDENCY_RESPONSES[reaction_tendency]
     responses = PRESET_RESPONSES.get(agent_id, {}).get(level, ["..."])
     import random
     return random.choice(responses)

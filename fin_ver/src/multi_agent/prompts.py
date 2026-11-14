@@ -522,6 +522,26 @@ def _build_status_text(agent_id: str, round_num, bullying_intensity, victim_dist
     )
 
 
+# 仅约束表达，不在提示词层重新选择行为或改写评估指标。
+TENDENCY_INSTRUCTIONS = {
+    "provoke": "主动挑衅或继续攻击，用嘲讽表达，不得自行改成道歉或支持",
+    "silence_fear": "害怕报复而回避、隐瞒；只描述可观察的非言语反应，如缩肩、避开视线，不得只写沉默",
+    "withdraw_cry": "痛苦退缩并哭泣，不要改成勇敢反击",
+    "withdraw": "低头退缩、减少表达，不要改成求助或反击",
+    "seek_help": "压力较低且有安全感，愿意说出被欺负的情况并求助",
+    "weak_protest": "小声、微弱地反驳或要求停止",
+    "thank_worried": "感谢支持，同时明确表达对安全或报复的担忧",
+    "thank_relieved": "感谢支持，表现出意外或安心",
+    "respond_cautious": "被点名后警惕、谨慎地回应，仍担忧风险",
+    "respond": "回应他人点名，表达自己在听",
+    "report_teacher": "强烈制止欺凌，表达向老师报告或求助的行动意愿，不捏造老师已到场",
+    "support_victim": "制止欺凌并安慰、支持受害者",
+    "mild_reminder": "温和提醒对方不要取笑、欺负同学",
+    "follow_majority": "跟随攻击者，小声附和或起哄，不要改成支持受害者",
+    "support_justice": "支持正义旁观者的制止行为、反对欺凌",
+}
+
+
 def build_system_prompt(
     agent_id: str,
     level: int,
@@ -532,6 +552,8 @@ def build_system_prompt(
     round_num: int = None,
     bullying_intensity: float = None,
     victim_distress: float = None,
+    decision: dict = None,
+    reaction_tendency: str = None,
 ) -> str:
     """
     构建系统提示（包含场景信息）
@@ -647,6 +669,26 @@ def build_system_prompt(
     status_text = _build_status_text(agent_id, round_num, bullying_intensity, victim_distress)
     if status_text:
         inject_block += status_text
+
+    if decision is not None:
+        tendency = reaction_tendency or decision.get("reaction_tendency")
+        meaning = TENDENCY_INSTRUCTIONS.get(tendency, "按规则决定的行为回应")
+        if tendency == "hesitate":
+            meaning = ("担心报复、群体支持不足，想介入但犹豫观望，用可观察动作表达"
+                       if agent_id == "bystander_a" else
+                       "正义旁观者已发声，犹豫但倾向支持制止，不要附和攻击")
+        rule_block = (
+            "\n## 本轮规则决策（优先于其他行为建议）\n"
+            f"should_speak={decision.get('should_speak')}；reaction_tendency={tendency}\n"
+            f"已选反应：{meaning}。\n"
+            "规则已经决定是否发言及反应倾向，你只负责表达，不得重新决定、抽样或选择另一种行为。\n"
+            "角色人设、等级、场景和实时状态只修饰措辞与表达，冲突时本轮规则优先。\n"
+        )
+        if decision.get("should_speak"):
+            rule_block += "本轮必须给出所选反应；可以是非言语动作，但不得输出空白、裸沉默、不发言或不回应。\n"
+        else:
+            rule_block += "本轮不发言，不生成任何学生台词或动作。\n"
+        prompt = rule_block + prompt + rule_block
 
     if inject_block:
         # ★ 场景背景+当前状态前移到「你的任务」之前，让角色先理解处境再行动（权重更高）

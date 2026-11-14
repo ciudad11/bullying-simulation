@@ -162,9 +162,11 @@ class StepRunner:
     Replaces LangGraph invoke(), each round runs independently.
     """
 
-    def __init__(self, state: SharedState, llm_client: Optional[LLMClient] = None):
+    def __init__(self, state: SharedState, llm_client: Optional[LLMClient] = None,
+                 use_llm: bool = True):
         self.state = state
         self.llm_client = llm_client
+        self.use_llm = use_llm
         self._convergence_triggered = False  # 收敛弹窗只触发一次
         set_llm_client(llm_client)
 
@@ -214,17 +216,11 @@ class StepRunner:
         while self.state.speaking_queue:
             agent_id = self.state.speaking_queue[0]
 
-            if agent_id == "bully":
-                result = _bully_node(self.state)
-            elif agent_id == "victim":
-                result = _victim_node(self.state)
-            elif agent_id == "bystander_a":
-                result = _bystander_a_node(self.state)
-            elif agent_id == "bystander_b":
-                result = _bystander_b_node(self.state)
-            else:
+            if agent_id not in {"bully", "victim", "bystander_a", "bystander_b"}:
                 break
-
+            from .supervisor import _agent_logic
+            result = _agent_logic(self.state, agent_id,
+                                  llm_client=self.llm_client, use_llm=self.use_llm)
             self._merge_result(result)
 
     def _merge_result(self, result: dict):
@@ -253,9 +249,8 @@ class StepRunner:
                         if msg_id not in existing_ids:
                             existing.append(msg)
             elif key == "pending_messages":
-                existing = getattr(self.state, key, [])
-                if isinstance(existing, list) and isinstance(value, list):
-                    existing.extend(value)
+                # 节点返回完整待评估列表，不是增量；extend 会重复评估旧消息。
+                self.state.pending_messages = list(value)
             else:
                 setattr(self.state, key, value)
 
@@ -274,6 +269,7 @@ class StepRunner:
                 **self.state.get_auto_end_status(),
             },
             "messages": [message_to_display(m) for m in self.state.messages],
+            **self.state.get_decision_status(),
             # 诊断字段：看后端 check_convergence 到底拿到了什么
             "_conv_diag": {
                 "round": self.state.round,
@@ -411,7 +407,7 @@ class MultiAgentRunner:
         # R5：会话 ID 写入状态，供 assessment_id 与状态日志追溯
         self.state.session_id = self.session_id
 
-        self._step_runner = StepRunner(self.state, self.llm_client)
+        self._step_runner = StepRunner(self.state, self.llm_client, use_llm=self.use_llm)
         self._prev_msg_count = 0
 
         print(f"[Runner] Ready (level={level}, max_rounds={max_rounds})")
@@ -427,6 +423,7 @@ class MultiAgentRunner:
                 "round": self.state.round,
                 "metrics": self._get_metrics(),
                 "messages": [],
+                **self.state.get_decision_status(),
             }
 
         prev_count = self._prev_msg_count

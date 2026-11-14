@@ -52,12 +52,20 @@ class AgentDecision:
     response: str               # 发言内容（如果should_speak=True）
     reasoning: str              # 决策理由（用于调试）
     confidence: float = 0.5     # 决策置信度
-    # R6：行为倾向标签（如 退缩/求助/感谢/反驳/沉默）。仅描述倾向，
-    # 经学生事件识别进入提案；Agent 不得直接写任何动态状态。
+    # R6：行为倾向标签（如 退缩/求助/感谢/反驳/沉默）。约束生成并记录证据，
+    # 评估仍识别实际消息内容，不凭标签写入动态状态。
     reaction_tendency: Optional[str] = None
 
 
 from dataclasses import dataclass
+
+
+def get_decision_messages(state: SharedState) -> List[Message]:
+    """规则的近期视图：当前及上一轮内最近四条，空轮也让旧事件过期。
+
+    首次开场仍由 decide 检查完整历史，不能把过期后的空窗口当作新会话。
+    """
+    return [m for m in state.messages if state.round - 1 <= m.round <= state.round][-4:]
 
 
 # ============================================================
@@ -162,7 +170,7 @@ class BullyAgent(BaseAgent):
         严重风险/即时威胁优先于概率公式（不被随机数绕过）。
         """
         import random
-        recent = state.get_recent_messages(4)
+        recent = get_decision_messages(state)
 
         # 首轮发言：主动发起挑衅（检查是否只有系统消息）
         if not state.messages or all(m.sender_id == "system" for m in state.messages):
@@ -276,7 +284,7 @@ class VictimAgent(BaseAgent):
         - 低压力时 → 可能小声反驳
         输出 reaction_tendency 供事件识别使用，不直接写状态。
         """
-        recent = state.get_recent_messages(4)
+        recent = get_decision_messages(state)
 
         # 检查是否刚发言过（冷却机制）
         recent_self = [
@@ -386,7 +394,7 @@ class BystanderAAgent(BaseAgent):
         - 严重霸凌 → 强烈干预或报告老师
         - 高干预冷却 → 暂时观察
         """
-        recent = state.get_recent_messages(4)
+        recent = get_decision_messages(state)
 
         # 检查是否有攻击
         has_attack = any(m.sender_id == "bully" for m in recent)
@@ -466,7 +474,7 @@ class BystanderBAgent(BaseAgent):
         - 感觉太过分 → 小声嘀咕
         - 看到老师 → 停止附和
         """
-        recent = state.get_recent_messages(4)
+        recent = get_decision_messages(state)
 
         # 统计最近发言
         bully_count = sum(1 for m in recent if m.sender_id == "bully")

@@ -200,6 +200,7 @@ class SessionManager:
             "messages": [],
             "interventions": [],
             "skip_decisions": [],
+            "decision_log": [],
             "metrics_history": [],
             # R8：内部状态轨迹（九项内部状态 + 残余效应），不能只保留汇总 B
             "internal_state_history": [],
@@ -278,6 +279,7 @@ class SessionManager:
             if self.runner is not None:
                 self.session_data["internal_state_history"] = list(
                     self.runner.state.internal_state_history)
+                self.session_data["decision_log"] = list(self.runner.state.decision_log)
         except Exception:
             pass
 
