@@ -168,6 +168,9 @@ class StepRunner:
         self.llm_client = llm_client
         self.use_llm = use_llm
         self._convergence_triggered = False  # 收敛弹窗只触发一次
+        # v2026-11-14（Major 修复）：被 sender_id+round 去重丢弃的消息留痕用。
+        # 持强引用，避免对象回收后 id() 被复用而误伤后续 pending 过滤。
+        self.dedup_dropped: list = []
         set_llm_client(llm_client)
 
     def step(self) -> dict:
@@ -228,18 +231,27 @@ class StepRunner:
         if not result:
             return
 
-        for key, value in result.items():
+        # "messages" 必须先合入：pending_messages 分支要靠 state.messages 判定某条消息
+        # 是否真的入档，若节点返回的 dict 把 pending 排在前面，过滤会误删正常台词。
+        for key in sorted(result.keys(), key=lambda k: k != "messages"):
+            value = result[key]
             if key == "messages":
                 existing = getattr(self.state, key, [])
                 if isinstance(existing, list) and isinstance(value, list):
                     # Deduplicate by sender_id+round
                     existing_ids = set()
+                    existing_objs = set()
                     for m in existing:
+                        existing_objs.add(id(m))
                         if hasattr(m, "sender_id"):
                             existing_ids.add(f"{m.sender_id}_{getattr(m, 'round', 0)}")
                         elif isinstance(m, dict):
                             existing_ids.add(f"{m.get('sender_id', '')}_{m.get('round', 0)}")
                     for msg in value:
+                        if msg is not None and id(msg) in existing_objs:
+                            # 节点回传的是「既有消息 + 新消息」的整表，既有对象只是回显，
+                            # 既不是新台词也不算被丢弃，绝不能落 deduplicated 证据。
+                            continue
                         if hasattr(msg, "sender_id"):
                             msg_id = f"{msg.sender_id}_{getattr(msg, 'round', 0)}"
                         elif isinstance(msg, dict):
@@ -248,11 +260,47 @@ class StepRunner:
                             msg_id = str(id(msg))
                         if msg_id not in existing_ids:
                             existing.append(msg)
+                            existing_ids.add(msg_id)
+                            existing_objs.add(id(msg))
+                        elif msg is not None and not any(msg is m for m in self.dedup_dropped):
+                            # v2026-11-14（Major 修复）：被去重丢弃的消息必须落证据，
+                            # 不能静默吞掉（旧实现丢转录却仍进 pending_messages 被评估）。
+                            self._record_dedup_drop(msg)
             elif key == "pending_messages":
                 # 节点返回完整待评估列表，不是增量；extend 会重复评估旧消息。
-                self.state.pending_messages = list(value)
+                # v2026-11-14（Major 修复）：待评估列表与转录必须同源——只回灌真正插入
+                # state.messages 的那几条（按对象身份过滤），被去重丢弃的不送去评估。
+                archived = {id(m) for m in getattr(self.state, "messages", [])}
+                self.state.pending_messages = [m for m in value if id(m) in archived]
             else:
                 setattr(self.state, key, value)
+
+    def _record_dedup_drop(self, msg):
+        """把去重丢弃落成可观测证据：命中则在该 agent 本轮决策证据上标 deduplicated，
+        没有对应决策记录时补一条独立的 decision_log 记录。"""
+        if isinstance(msg, dict):
+            sender_id, round_no = msg.get("sender_id", ""), msg.get("round", 0)
+        else:
+            sender_id, round_no = getattr(msg, "sender_id", ""), getattr(msg, "round", 0)
+        self.dedup_dropped.append(msg)
+        log = getattr(self.state, "decision_log", None)
+        if not isinstance(log, list):
+            return
+        for entry in reversed(log):
+            if (isinstance(entry, dict) and entry.get("agent_id") == sender_id
+                    and entry.get("round") == round_no):
+                entry["deduplicated"] = True
+                return
+        log.append({
+            "round": round_no,
+            "agent_id": sender_id,
+            "deduplicated": True,
+            "produced_message": False,
+            "generation_source": "deduplicated",
+            "raw_len": 0,
+            "kept_len": len(getattr(msg, "content", "") or ""),
+            "reason": "同 (sender_id, round) 已有消息，按 sender_id+round 去重丢弃，未入转录也不送评估",
+        })
 
     def _build_response(self, done: bool, convergence: dict = None) -> dict:
         resp = {
@@ -440,6 +488,8 @@ class MultiAgentRunner:
         # ★ 关键修复：将教师干预消息注入 state.messages，
         # 让学生智能体在下一轮生成回复时能在对话上下文中看到老师说了什么，
         # 而不仅仅影响参数（bullying_intensity/victim_distress）
+        # 任务#82：这里是教师消息的**唯一注入点**；evaluator_node 侧的同名 append
+        # 已删除（旧版一次干预会注入两条逐字相同的 teacher 消息，hist_n +2）。
         teacher_msg = StateMessage(
             sender_id="teacher",
             sender_name="张老师",

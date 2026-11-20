@@ -23,6 +23,9 @@ const state = {
     currentScenario: null,  // 当前情境
     scenarioModified: false,  // 情境是否被修改
     lastReport: null,  // 上次的报告数据
+    // 任务#87：报告查看指针（历史记录/报告弹窗当前展示的会话）
+    // 与运行指针 sessionId 解耦：查看历史报告不得覆写进行中会话的 sessionId。
+    viewingReportSessionId: null,
     sessionHistory: [],  // 会话历史记录
     participants: [],  // 参与者列表
     currentEditingParticipant: null,  // 当前编辑的参与者
@@ -151,7 +154,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     initEventListeners();
     updateLevelInfo(2);
     loadScenarios();
-    loadParticipants().then(() => renderParticipantCheckboxes());
+    loadParticipants().then(() => {
+        renderParticipantCheckboxes();
+        refreshPersonaDisplay();
+    });
     loadInterventions();
 });
 
@@ -392,6 +398,8 @@ function initEventListeners() {
     document.getElementById('btn-reset-participant')?.addEventListener('click', resetCurrentParticipant);
     document.getElementById('btn-new-participant')?.addEventListener('click', prepareNewParticipant);
     document.getElementById('btn-delete-participant')?.addEventListener('click', deleteParticipant);
+    // #53：角色类型下拉 → 角色标签的联动，在初始化时绑一次（函数内幂等，重复调用无副作用）
+    bindRoleTypeBadgeSync();
 
     // 干预库编辑相关
     document.getElementById('btn-edit-interventions')?.addEventListener('click', openInterventionModal);
@@ -613,6 +621,8 @@ async function startSimulation() {
         state.sessionId = result.session_id;
         // R27：记录 DB 会话ID（数据库报告/会话以其为准），供历史记录持久打开完整报告
         state.dbSessionId = result.db_session_id || null;
+        // 任务#87：新会话即新运行指针，历史报告查看指针必须复位
+        state.viewingReportSessionId = null;
         state.isRunning = true;
         state.isPaused = false;
         state.maxRounds = getMaxRounds(state.level);
@@ -628,6 +638,8 @@ async function startSimulation() {
         if (result.scenario) {
             state.currentScenario = result.scenario;
         }
+        // 后端返回的是带 cast 的完整情景：界面人设随之对齐到实际使用的角色
+        refreshPersonaDisplay();
 
         // 更新按钮状态 - 运行中
         updateButtonStates('running');
@@ -728,6 +740,9 @@ async function finalizeStop(autoEnded = false, autoEndReason = '', resultType = 
     try {
         console.log('Getting report...');
         state.lastReport = await apiCall(`/api/session/${state.sessionId}/report`);
+        // 任务#87：补齐报告缓存对应的会话标记，报告查看指针同步指向当前会话
+        state.lastReportSessionId = state.sessionId;
+        state.viewingReportSessionId = state.sessionId;
         console.log('Report received, updating buttons');
 
         // 保存到历史记录
@@ -1100,8 +1115,10 @@ async function viewReportFromHistory(recordId) {
         try {
             const report = await apiCall(`/api/session/${sid}/report`);
             if (report && (report.summary || report.report_data || report.training_report)) {
-                // 缓存为当前渲染报告，导出（TXT/PDF/Word）复用同一份，保证与网页一致
-                state.sessionId = sid;
+                // 缓存为当前渲染报告，导出（TXT/PDF/Word）复用同一份，保证与网页一致；
+                // 任务#87：只写报告查看指针，绝不覆写运行中的 state.sessionId，
+                // 否则后续 run/intervene/skip 会打到已结束的历史会话并 404。
+                state.viewingReportSessionId = sid;
                 state.lastReport = report;
                 state.lastReportSessionId = sid;
                 document.getElementById('report-content').innerHTML = buildReportHTML(report);
@@ -1137,6 +1154,10 @@ async function viewReportFromHistory(recordId) {
     };
 
     // 显示报告
+    // 任务#87：本地摘要没有服务端会话可下载，清空报告指针与缓存，避免误用其它会话的报告
+    state.viewingReportSessionId = null;
+    state.lastReport = null;
+    state.lastReportSessionId = null;
     displayReport(report);
     document.getElementById('report-modal').classList.add('active');
 }
@@ -1185,6 +1206,11 @@ function getLevelName(level) {
 
 // 查看报告
 async function viewReport() {
+    // 任务#87：「查看报告」针对当前运行/已结束会话；此前可能刚看过历史报告，
+    // 这里显式把报告查看指针切回当前会话，避免渲染/导出串到历史会话。
+    const targetSid = state.sessionId || null;
+    if (targetSid) state.viewingReportSessionId = targetSid;
+
     // 如果报告正在生成中，显示等待状态
     if (state.reportGenerating) {
         document.getElementById('report-content').innerHTML = `
@@ -1197,8 +1223,8 @@ async function viewReport() {
         return;
     }
 
-    // 如果 lastReport 为空但有 sessionId，尝试重新获取
-    if (!state.lastReport && state.sessionId) {
+    // 如果 lastReport 为空或属于其它会话，尝试重新获取当前会话的报告（任务#87：按会话校验）
+    if (targetSid && (!state.lastReport || state.lastReportSessionId !== targetSid)) {
         // 再次检查是否正在生成（可能在查看期间完成）
         if (state.reportGenerating) {
             document.getElementById('report-content').innerHTML = `
@@ -1211,7 +1237,7 @@ async function viewReport() {
             return;
         }
         try {
-            state.lastReport = await apiCall(`/api/session/${state.sessionId}/report`);
+            state.lastReport = await apiCall(`/api/session/${targetSid}/report`);
         } catch (e) {
             console.error('重新获取报告失败:', e);
             alert('无法加载报告: ' + (e.message || '请检查网络连接'));
@@ -1222,7 +1248,7 @@ async function viewReport() {
         // R26：与结束后的报告面板一致 —— 使用与 showReport 相同的完整渲染源
         document.getElementById('report-content').innerHTML = buildReportHTML(state.lastReport);
         // 记录本次渲染对应的会话，供导出复用同一份报告（保证下载与网页一致）
-        state.lastReportSessionId = state.sessionId;
+        state.lastReportSessionId = targetSid;
         document.getElementById('session-badge').textContent = '已完成';
         document.getElementById('session-badge').className = 'badge';
         document.getElementById('report-modal').classList.add('active');
@@ -1242,8 +1268,11 @@ async function viewReport() {
 
 // 获取用于导出的报告数据（与网页 showReport 同一接口；历史会话回退数据库快照）
 async function getReportForExport() {
-    if (!state.sessionId) {
-        alert('当前没有会话，无法导出报告');
+    // 任务#87：导出对象=报告弹窗当前展示的会话（历史报告查看指针优先），
+    // 不读取也不改写运行指针 state.sessionId。
+    const targetSid = state.viewingReportSessionId || state.sessionId;
+    if (!targetSid) {
+        alert('没有活跃的会话');
         return null;
     }
     if (state.reportGenerating) {
@@ -1254,13 +1283,13 @@ async function getReportForExport() {
     // 后端 /report 对内存会话每次调用都会重新生成，报告ID/生成时间/模拟时长随之变化；
     // 若导出时再次请求接口，会得到与网页不同的一份快照。因此优先复用网页刚刚渲染
     // 并缓存的同一份报告对象（按渲染时的会话ID校验，避免跨会话误用旧报告）。
-    if (state.lastReport && state.lastReportSessionId === state.sessionId) {
+    if (state.lastReport && state.lastReportSessionId === targetSid) {
         return state.lastReport;
     }
     try {
-        const report = await apiCall(`/api/session/${state.sessionId}/report`);
+        const report = await apiCall(`/api/session/${targetSid}/report`);
         state.lastReport = report;
-        state.lastReportSessionId = state.sessionId;
+        state.lastReportSessionId = targetSid;
         return report;
     } catch (error) {
         console.error('获取报告失败:', error);
@@ -1284,7 +1313,7 @@ function collectPageCSS() {
 function buildExportDocumentHTML(report) {
     const reportHtml = buildReportHTML(report);
     const css = collectPageCSS();
-    const sid = escapeHtml(report.session_id || state.sessionId || '');
+    const sid = escapeHtml(report.session_id || state.viewingReportSessionId || state.sessionId || '');
     const genAt = escapeHtml(new Date().toLocaleString('zh-CN'));
     return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -1428,7 +1457,7 @@ async function downloadTextReport() {
             '='.repeat(80),
             '',
             `生成时间: ${new Date().toLocaleString('zh-CN')}`,
-            `会话ID: ${report.session_id || state.sessionId || 'N/A'}`,
+            `会话ID: ${report.session_id || state.viewingReportSessionId || state.sessionId || 'N/A'}`,
             `模拟时长: ${report.session_duration || 'N/A'}`,
             `模拟轮数: ${report.total_rounds || 'N/A'}`,
             '',
@@ -2193,6 +2222,8 @@ function resetToStart() {
     // R26：清空上一会话缓存的报告，避免新会话误渲染/误导出旧报告
     state.lastReport = null;
     state.lastReportSessionId = null;
+    // 任务#87：清空历史报告查看指针，避免新会话误用旧报告
+    state.viewingReportSessionId = null;
     // R27：清空 DB 会话ID
     state.dbSessionId = null;
     // R15：指导门槛状态复位
@@ -2234,6 +2265,7 @@ function resetToStart() {
     state.currentScenario = null;
     state.scenarioModified = false;
     updateScenarioTip();
+    refreshPersonaDisplay();   // 新会话：档案卡/参与角色人设回落默认四人
 
     // 重置状态
     document.getElementById('status-round').textContent = '0';
@@ -3305,6 +3337,8 @@ async function showReport() {
         // （后端对内存会话每次 /report 都重新生成，报告ID/生成时间/时长会变，不能再次请求）。
         state.lastReport = report;
         state.lastReportSessionId = state.sessionId;
+        // 任务#87：报告弹窗展示的是当前会话，报告查看指针同步指向它
+        state.viewingReportSessionId = state.sessionId;
 
         // 显示模态框
         document.getElementById('report-modal').classList.add('active');
@@ -3356,6 +3390,7 @@ function onScenarioSelect() {
         state.currentScenario = null;
         state.scenarioModified = false;
         updateScenarioTip();
+        refreshPersonaDisplay();   // 回到默认四句人设
         return;
     }
 
@@ -3367,6 +3402,7 @@ function onScenarioSelect() {
         document.getElementById('scenario-desc').value = scenario.description;
         state.scenarioModified = false;
         updateScenarioTip();
+        refreshPersonaDisplay();   // 档案卡/参与角色列表改为该情景的实际人设
 
         // 自动选择级别
         if (scenario.level) {
@@ -3397,6 +3433,7 @@ function enableScenarioSelection() {
     state.currentScenario = null;
     state.scenarioModified = false;
     updateScenarioTip();
+    refreshPersonaDisplay();   // 新会话：人设回到默认四人
 
     // 显示开始按钮(禁用状态)
     const btnStart = document.getElementById('btn-start');
@@ -3434,6 +3471,7 @@ function newScenario() {
     state.currentScenario = null;
     state.scenarioModified = true;
     updateScenarioTip();
+    refreshPersonaDisplay();   // 新建情境尚无 cast，人设回落默认四人
     document.getElementById('scenario-title').focus();
 }
 
@@ -3467,6 +3505,7 @@ async function saveScenario() {
         state.currentScenario = result.scenario;
         state.scenarioModified = false;
         updateScenarioTip();
+        refreshPersonaDisplay();   // 自建情境没有 cast → 回落默认四句
 
         // 显示保存成功
         const tip = document.getElementById('scenario-tip');
@@ -3517,6 +3556,235 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// ============================================================
+// 情景人设（cast）展示层
+// ============================================================
+// 档案卡与「参与角色」勾选列表显示的人设，数据源是当前所选情景返回的 cast：
+//   scenario.cast[role] = { name, personality: { traits[], speakingStyle[], background, cognitiveStyle } }
+//   role ∈ bully / victim / bystander_a / bystander_b
+// 情景没有 cast（自建/DB 情境只有 title/description/level）、或该角色 personality.traits
+// 为空时，回落到 DEFAULT_PERSONA_TEXTS 里按 role 键控的默认四句。这四句原本写死在
+// web/templates/index.html 的档案卡里，现在只是 fallback，不再是界面的唯一来源。
+// 只影响「展示」，不改变发送给 /api/session 的 participant_ids / participants_data。
+
+const SYSTEM_ROLE_KEYS = ['bully', 'victim', 'bystander_a', 'bystander_b'];
+
+const ROLE_NAME_BY_KEY = {
+    bully: '霸凌者',
+    victim: '受害者',
+    bystander_a: '正义旁观者',
+    bystander_b: '从众旁观者',
+};
+
+// 默认人设回落句（与 index.html 档案卡初始文案逐字一致）
+const DEFAULT_PERSONA_TEXTS = {
+    bully: '性格较为自我中心',
+    victim: '性格较为内向敏感',
+    bystander_a: '性格较为正直',
+    bystander_b: '性格较为从众',
+};
+
+// 档案卡 DOM 节点 id（模板按默认姓名写死，highlightSpeaker 依赖这些 id，不可改）
+const PERSONA_CARD_ID_BY_ROLE = {
+    bully: 'part-chenhao',
+    victim: 'part-siyuan',
+    bystander_a: 'part-linyutong',
+    bystander_b: 'part-zhaolei',
+};
+
+// 字符串或数组都接受，产出 trim 后的非空字符串数组
+function _asTextList(value) {
+    if (value === null || value === undefined || value === '') return [];
+    const list = Array.isArray(value) ? value : [value];
+    return list.map(item => String(item).trim()).filter(item => item.length > 0);
+}
+
+// 属性值专用转义（escapeHtml 不处理引号）
+function _attrText(text) {
+    return String(text === null || text === undefined ? '' : text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function getScenarioCastEntry(role) {
+    const scenario = state.currentScenario;
+    const cast = scenario ? scenario.cast : null;
+    if (!cast || typeof cast !== 'object') return null;
+    const entry = cast[role];
+    return entry && typeof entry === 'object' ? entry : null;
+}
+
+// 与后端 graph_builder._DEFAULT_ROLE_NAMES 同一口径：这四个名字是系统种子名，
+// 拿它当「用户自定义」会把默认记录误判成自定义角色（后端 :423 就是这么判的）。
+const SYSTEM_DEFAULT_PERSONA_NAMES = ['陈浩', '思远', '林雨桐', '赵磊'];
+
+// 找出「绑定到某个系统角色位」的参与者记录，与后端 role_key = pdata.role || pid 一致。
+// 优先 custom_* 记录（真正的自定义角色），其次才是 id 就是角色键的系统种子记录。
+function _participantForRoleKey(role) {
+    const matches = state.participants.filter(p => resolveRoleKey(p) === role);
+    if (!matches.length) return null;
+    return matches.find(p => String(p.id || '').startsWith('custom_')) || matches[0];
+}
+
+// 字段级覆盖，逐字对应后端 graph_builder._merge_personality：
+// override 的非空字段覆盖 base，空字段（''/[]/null）保留 base。
+function _mergePersonaFields(base, override) {
+    const merged = Object.assign({}, base || {});
+    Object.keys(override || {}).forEach(key => {
+        const value = override[key];
+        // 后端判「非空」用的是 Python truthiness：'' / [] / None 都算空，保留 base。
+        if (_asTextList(value).length > 0) {
+            merged[key] = value;
+        }
+    });
+    return merged;
+}
+
+// 取某角色在当前情景下应当展示的人设，返回 { name, text, title, source }
+// name 为空串表示拿不到可靠姓名，调用方保留界面原文案（不把英文 role 泄漏到界面）
+//
+// 任务#60（Major-2）：优先级改成 **自定义 participant.personality > 情景 cast > 默认**。
+// 旧实现先取 cast、命中即 return，把自定义人设降为第二步，而后端
+// graph_builder.py:400-409 先铺 cast、:412-428 再用自定义 participant **逐字段覆盖**
+// ——显示优先级与生效优先级正好相反：勾一个 role=victim 的自定义角色并填了人设，
+// 档案卡仍显示 s8 cast 的「陈默/强硬、好面子」，生成用的却是自定义人设。
+// 现在按后端同一口径做字段级合并（traits/speakingStyle/background/cognitiveStyle
+// 各自独立覆盖），姓名另判：只有非系统种子名才算用户改过名字（对齐 _DEFAULT_ROLE_NAMES）。
+function getDisplayPersona(role) {
+    const participant = _participantForRoleKey(role);
+    const participantName = _asTextList(participant ? participant.name : '')[0] || '';
+    const entry = getScenarioCastEntry(role);
+    const castPersonality = entry && entry.personality && typeof entry.personality === 'object'
+        ? entry.personality
+        : null;
+    const customPersonality = participant && participant.personality
+        && typeof participant.personality === 'object'
+        ? participant.personality
+        : null;
+    // 自定义记录是否真的带了人设内容（空 {} / 全空字段的种子记录不算自定义）
+    const customFields = Object.keys(customPersonality || {}).filter(k =>
+        _asTextList(customPersonality[k]).length > 0);
+    const personality = _mergePersonaFields(castPersonality, customPersonality);
+    const traits = _asTextList(personality.traits);
+    // 姓名：自定义名（非系统种子名）> cast 名 > 记录自带名
+    const customName = (participantName &&
+        SYSTEM_DEFAULT_PERSONA_NAMES.indexOf(participantName) === -1)
+        ? participantName : '';
+
+    if (traits.length > 0) {
+        const speakingStyle = _asTextList(personality.speakingStyle);
+        const cognitiveStyle = _asTextList(personality.cognitiveStyle);
+        const background = _asTextList(personality.background).join('');
+        const detailParts = [`性格：${traits.join('、')}`];
+        if (background) detailParts.push(`背景：${background}`);
+        if (speakingStyle.length) detailParts.push(`说话风格：${speakingStyle.join('、')}`);
+        if (cognitiveStyle.length) detailParts.push(`想法：${cognitiveStyle.join('；')}`);
+        return {
+            name: customName || _asTextList(entry ? entry.name : '')[0] || participantName,
+            text: traits.slice(0, 2).join('、'),
+            title: detailParts.join('\n'),
+            source: customFields.length > 0 ? 'participant_personality' : 'scenario_cast',
+        };
+    }
+
+    // 3) 回落默认四句（既没有 cast traits，也没有自定义 traits）
+    return {
+        name: customName || _asTextList(entry ? entry.name : '')[0] || participantName,
+        text: DEFAULT_PERSONA_TEXTS[role] || '',
+        title: DEFAULT_PERSONA_TEXTS[role] || '',
+        source: 'default_fallback',
+    };
+}
+
+// 就地刷新人设文案：不重建勾选列表，避免丢用户勾选状态与模拟进行中的禁用状态
+function refreshPersonaDisplay() {
+    SYSTEM_ROLE_KEYS.forEach(role => {
+        const display = getDisplayPersona(role);
+
+        const card = document.getElementById(PERSONA_CARD_ID_BY_ROLE[role]);
+        if (card) {
+            const nameEl = card.querySelector('.participant-info strong');
+            if (nameEl && display.name) nameEl.textContent = display.name;
+            const traitEl = card.querySelector('.participant-detail .trait');
+            if (traitEl && display.text) traitEl.textContent = display.text;
+            if (display.title) card.setAttribute('title', display.title);
+            else card.removeAttribute('title');
+            card.dataset.personaSource = display.source;
+        }
+
+        const label = document.querySelector(`#participant-checkboxes label[data-id="${role}"]`);
+        if (label) {
+            const nameEl = label.querySelector('.pc-name');
+            if (nameEl && display.name) nameEl.textContent = display.name;
+            const detailEl = label.querySelector('.pc-detail');
+            if (detailEl && display.text) detailEl.textContent = display.text;
+            if (display.title) label.setAttribute('title', display.title);
+            else label.removeAttribute('title');
+        }
+    });
+}
+
+// 角色类型键（bully/victim/bystander_a/bystander_b）；认不出来返回空串
+function resolveRoleKey(participant) {
+    if (!participant) return '';
+    const candidates = [participant.role, participant.id];
+    for (let i = 0; i < candidates.length; i += 1) {
+        const value = candidates[i];
+        if (typeof value === 'string' && Object.prototype.hasOwnProperty.call(ROLE_NAME_BY_KEY, value)) {
+            return value;
+        }
+    }
+    return '';
+}
+
+// 把角色类型下拉设为指定键；键不合法就清空下拉（宁可空着，也不留上一条记录的残留值，
+// 否则界面会显示一个「看着对、其实没同步」的下拉）。返回真正生效的键（可能为 ''）。
+function setRoleTypeSelect(roleKey) {
+    const select = document.getElementById('edit-role-type');
+    if (!select) return '';
+    const key = ROLE_NAME_BY_KEY[roleKey] ? roleKey : '';
+    select.value = key;
+    return key;
+}
+
+// 下拉值 → 角色标签（#edit-participant-role）文字联动，保证「看到的类型」= 「提交的类型」。
+// 值不合法时不动标签：标签上此时显示的是记录自带的角色名，抹成空白只会更让人困惑。
+function syncRoleBadgeFromRoleType(roleType) {
+    const badge = document.getElementById('edit-participant-role');
+    const roleName = ROLE_NAME_BY_KEY[roleType];
+    if (!badge || !roleName) return;
+    badge.textContent = roleName;
+}
+
+// #53：下拉与标签的联动只绑一次。
+// 原来这个 change 监听写在 prepareNewParticipant() 内部：每点一次「＋新建角色」就叠加一个监听器，
+// 而编辑「已存在的自定义角色」时根本没绑——改了下拉，角色标签不动。
+// 改成幂等绑定（dataset 标记），由 initEventListeners 与各入口重复调用，只有一次真正生效。
+function bindRoleTypeBadgeSync() {
+    const select = document.getElementById('edit-role-type');
+    if (!select) return false;
+    if (select.dataset.badgeSyncBound === '1') return true;
+    select.dataset.badgeSyncBound = '1';
+    select.addEventListener('change', (e) => {
+        // 下拉被隐藏时（系统角色不允许改类型）不响应：标签不能跟着一个用户根本看不见的控件跳。
+        const group = document.getElementById('group-edit-role-type');
+        if (group && group.classList.contains('hidden')) return;
+        syncRoleBadgeFromRoleType(String(e.target.value || ''));
+    });
+    return true;
+}
+
+// 角色类型白名单校验：非法（含空）时统一报错并返回 ''，三条保存路径共用。
+// 返回 { roleType, roleName }，roleName 为 undefined 表示非法、调用方必须中止。
+function readValidatedRoleType(source) {
+    const roleType = source === 'participant'
+        ? resolveRoleKey(state.currentEditingParticipant)
+        : String(document.getElementById('edit-role-type')?.value || '');
+    return { roleType, roleName: ROLE_NAME_BY_KEY[roleType] };
 }
 
 // ============================================================
@@ -3582,11 +3850,22 @@ function selectParticipant(id) {
 
     // 自定义徽章
     const customBadge = document.getElementById('edit-participant-custom-badge');
+    const roleTypeGroup = document.getElementById('group-edit-role-type');
+    bindRoleTypeBadgeSync();   // 幂等：编辑已有自定义角色时，下拉↔标签联动也必须在（原来只有「新建」路径绑过）
+    // D-1：角色类型下拉即使是隐藏的（系统角色），也必须是该角色真实 role。
+    // 之前只隐藏不赋值，saveParticipant 读到的仍是上一次遗留值/默认 bully，
+    // 编辑 bystander_b 生成的副本会变成「霸凌者」。
+    // #53：下拉对自定义角色是可见可改的，同步进去的值必须与随后 PUT 的值一致。
+    const roleKey = resolveRoleKey(participant);
+    setRoleTypeSelect(roleKey);
     if (isSystem) {
         customBadge.classList.add('hidden');
-        document.getElementById('group-edit-role-type').classList.add('hidden');
+        roleTypeGroup.classList.add('hidden');
+        // 系统角色不允许改类型：拿到可靠 role 时用它的标准角色名刷新标签
+        syncRoleBadgeFromRoleType(roleKey);
     } else {
         customBadge.classList.remove('hidden');
+        roleTypeGroup.classList.remove('hidden');
     }
 
     // 系统角色可编辑姓名但不能改角色类型
@@ -3608,6 +3887,7 @@ function selectParticipant(id) {
 
 async function openParticipantModal() {
     await loadParticipants();
+    bindRoleTypeBadgeSync();   // 幂等，兜住 init 时 select 尚未存在的情况
 
     state._isNewParticipant = false;
 
@@ -3655,11 +3935,10 @@ function prepareNewParticipant() {
 
     // 显示角色类型选择器
     document.getElementById('group-edit-role-type').classList.remove('hidden');
-    document.getElementById('edit-role-type').value = 'bully';
-    document.getElementById('edit-role-type').addEventListener('change', function(e) {
-        const roleNames = { bully: '霸凌者', victim: '受害者', bystander_a: '正义旁观者', bystander_b: '从众旁观者' };
-        document.getElementById('edit-participant-role').textContent = roleNames[e.target.value] || '';
-    });
+    setRoleTypeSelect('bully');
+    // #53：联动改成一次性幂等绑定（bindRoleTypeBadgeSync），不再在这里 addEventListener。
+    // 原来每点一次「＋新建角色」就往同一个 select 上再叠一个 change 监听器。
+    bindRoleTypeBadgeSync();
 
     // 按钮状态
     document.getElementById('btn-delete-participant').classList.add('hidden');
@@ -3721,27 +4000,46 @@ async function saveParticipant() {
     const traits = traitsText ? traitsText.split(/[、,,]/).map(t => t.trim()).filter(t => t) : [];
     const speakingStyle = speakingStyleText ? speakingStyleText.split(/[、,,]/).map(s => s.trim()).filter(s => s) : [];
 
+    // 角色类型：三条路径（新建 / 编辑系统角色→副本 / 更新已有自定义角色）共用同一套校验。
+    // D-1：系统角色以被编辑角色自身的 role 为准（下拉此时被隐藏，值不可信）；
+    //      新建与更新自定义角色以下拉当前值为准（下拉对它们是可见可改的）。
+    // #53：下拉既然对已有自定义角色可见可改，PUT 就必须真的带上 role——
+    //      后端 PUT 一直是收 role 的（web/app.py 的 update_participant → database._do_update_participant
+    //      会更新 role 列），旧代码只发 roleName，导致这个控件「改了不生效」，比隐藏更误导。
+    //      不合法（含空）一律中止且不发任何请求，绝不静默写入错类型。
+    const { roleType, roleName } = readValidatedRoleType(isSystem ? 'participant' : 'select');
+    if (!roleName) {
+        const aborted = isSystem ? '未创建任何副本' : (isNew ? '未创建任何角色' : '未修改任何角色');
+        console.error('角色类型非法，已中止保存:', {
+            roleType,
+            participant: state.currentEditingParticipant,
+        });
+        alert(`保存失败：角色类型「${roleType || '(空)'}」无效，只能是 ${SYSTEM_ROLE_KEYS.join(' / ')} 之一。已中止，${aborted}。`);
+        return;
+    }
+    // 界面标签跟着最终提交的类型走，避免出现「标签=霸凌者、实际提交=受害者」
+    syncRoleBadgeFromRoleType(roleType);
+
     try {
         let result;
         if (isNew || isSystem) {
             // 新建角色 / 编辑系统角色(自动转为自定义副本)
-            const roleType = document.getElementById('edit-role-type').value;
-            const roleNames = { bully: '霸凌者', victim: '受害者', bystander_a: '正义旁观者', bystander_b: '从众旁观者' };
             result = await apiCall('/api/participants', 'POST', {
                 name: name,
                 role: roleType,
-                roleName: roleNames[roleType] || '',
+                roleName: roleName,
                 personality: { background, traits, speakingStyle }
             });
             if (isSystem && result.success) {
-                alert('已创建自定义角色副本，预设角色未被修改');
+                alert(`已创建自定义角色副本（角色类型：${roleName}），预设角色未被修改`);
             }
         } else {
             // 更新自定义角色
             const id = state.currentEditingParticipant.id;
             result = await apiCall(`/api/participants/${id}`, 'PUT', {
                 name: name,
-                roleName: state.currentEditingParticipant.roleName || '',
+                role: roleType,
+                roleName: roleName,
                 personality: { background, traits, speakingStyle }
             });
         }
@@ -3847,15 +4145,19 @@ function renderParticipantCheckboxes() {
 
     container.innerHTML = sorted.map(p => {
         const checked = defaultSelected.includes(p.id) || !p.id.startsWith('custom_');
+        // 四个系统角色显示当前情景的实际人设；自定义角色仍用自身 personality
+        const display = SYSTEM_ROLE_KEYS.includes(p.id) ? getDisplayPersona(p.id) : null;
         const pers = p.personality || {};
         const traits = Array.isArray(pers.traits) ? pers.traits.slice(0, 2).join('、') : '';
-        const detail = traits || pers.background?.slice(0, 15) || '';
+        const detail = display ? display.text : (traits || pers.background?.slice(0, 15) || '');
+        const name = (display && display.name) || p.name;
+        const title = (display && display.title) || detail;
         return `
-        <label class="participant-checkbox-item" data-id="${p.id}" title="${detail}">
+        <label class="participant-checkbox-item" data-id="${p.id}" title="${_attrText(title)}">
             <input type="checkbox" value="${p.id}" ${checked ? 'checked' : ''}>
             <div style="flex:1;min-width:0;">
-                <span class="pc-name">${p.name}</span>
-                ${detail ? `<span style="display:block;font-size:0.7rem;color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${detail}</span>` : ''}
+                <span class="pc-name">${escapeHtml(name)}</span>
+                ${detail ? `<span class="pc-detail" style="display:block;font-size:0.7rem;color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(detail)}</span>` : ''}
             </div>
         </label>`;
     }).join('');
@@ -3879,21 +4181,22 @@ function updateParticipantPanel() {
     // 保留系统默认四个角色卡片，更新它们的显示
     const systemCards = panel.querySelectorAll('.participant:not(.dynamic)');
 
-    // 更新系统角色卡片
+    // 更新系统角色卡片：姓名与性格取自当前情景的实际人设（cast），
+    // 情景没有 cast 或 personality 为空时回落默认四句（见 getDisplayPersona）
     // 注意：data-role 属性已移除（避免在 DOM 中暴露角色身份），
     // 改用卡片 id（part-<角色id>）定位对应参与者
     systemCards.forEach((card, idx) => {
         const roleId = defaultIds[idx];
-        const p = state.participants.find(pp => pp.id === roleId);
-        if (p) {
-            const nameEl = card.querySelector('.participant-info strong');
-            if (nameEl) nameEl.textContent = p.name;
-            // 角色标签不在学员界面展示
-            const traitEl = card.querySelector('.participant-detail .trait');
-            if (traitEl && p.personality?.traits?.length > 0) {
-                traitEl.textContent = p.personality.traits.slice(0, 2).join('、');
-            }
-        }
+        if (!roleId) return;
+        const display = getDisplayPersona(roleId);
+        const nameEl = card.querySelector('.participant-info strong');
+        if (nameEl && display.name) nameEl.textContent = display.name;
+        // 角色标签不在学员界面展示
+        const traitEl = card.querySelector('.participant-detail .trait');
+        if (traitEl && display.text) traitEl.textContent = display.text;
+        if (display.title) card.setAttribute('title', display.title);
+        else card.removeAttribute('title');
+        card.dataset.personaSource = display.source;
     });
 
     // 添加自定义角色卡片
@@ -3907,12 +4210,12 @@ function updateParticipantPanel() {
             <div class="participant-header">
                 <span class="participant-icon">👤</span>
                 <div class="participant-info">
-                    <strong>${p.name}</strong>
+                    <strong>${escapeHtml(p.name)}</strong>
                 </div>
                 <span class="status-dot"></span>
             </div>
             <div class="participant-detail">
-                <p class="trait">${(p.personality?.traits || []).slice(0, 2).join('、') || '自定义角色'}</p>
+                <p class="trait">${escapeHtml((p.personality?.traits || []).slice(0, 2).join('、') || '自定义角色')}</p>
             </div>`;
         panel.appendChild(card);
     });
@@ -4009,6 +4312,33 @@ function hideInterventionWarning() {
     });
 }
 
+// 任务#82 修正 2：悬浮预览口径。
+// 旧写法 title 直接截 content 前 50 字——10 条预设的前 50 字里只有前 4–10 字不同，
+// 其余是同一段骨架，于是「看上去像同一句话」。新口径 = 标题 + 首句 + 第二句开头
+// （第二句只取 18 字作补充），点击后填入的仍是全文（applyPresetToInput 不变）。
+function presetPreviewText(item) {
+    const raw = String((item && item.content) || '').replace(/\s+/g, ' ').trim();
+    if (!raw) return String((item && item.title) || '');
+    const m = raw.match(/^[^。！？!?]*[。！？!?]?/);
+    const first = (m ? m[0] : raw).trim();
+    const rest = raw.slice(first.length).replace(/^[，,、；;：:\s]+/, '');
+    let second = rest.slice(0, 18);
+    // 预览是给人看的：截断点若落在【…】占位符中间，回退到占位符之前，避免「【受…」
+    const open = second.lastIndexOf('【');
+    if (open >= 0 && second.indexOf('】', open) < 0) {
+        second = second.slice(0, open).replace(/[，,、；;：:\s]+$/, '');
+    }
+    let text = first + (second ? second + (rest.length > 18 ? '…' : '') : '');
+    if (text.length > 64) text = text.slice(0, 64) + '…';
+    return text;
+}
+
+function escapeAttr(text) {
+    return String(text == null ? '' : text)
+        .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function renderQuickButtons() {
     const container = document.getElementById('quick-btn-list');
     if (!container) return;
@@ -4016,8 +4346,8 @@ function renderQuickButtons() {
     // 显示推荐的干预(最多5个)
     const toShow = state.recommendedInterventions.slice(0, 5);
     container.innerHTML = toShow.map(item => `
-        <button class="quick-btn" data-id="${item.id}" title="${item.content.slice(0, 50)}...">
-            ${item.title}
+        <button class="quick-btn" data-id="${item.id}" title="${escapeAttr(item.title + '：' + presetPreviewText(item))}">
+            ${escapeAttr(item.title)}
         </button>
     `).join('');
 
@@ -4039,8 +4369,8 @@ function renderQuickButtons() {
             !state.recommendedInterventions.slice(0, 5).some(r => r.id === i.id)
         );
         moreList.innerHTML = remaining.map(item => `
-            <button class="quick-btn" data-id="${item.id}" title="${item.content.slice(0, 50)}...">
-                ${item.title}
+            <button class="quick-btn" data-id="${item.id}" title="${escapeAttr(item.title + '：' + presetPreviewText(item))}">
+                ${escapeAttr(item.title)}
             </button>
         `).join('');
 
@@ -4457,13 +4787,15 @@ function drawOBVQRadar(dimAvgs) {
 
 // 下载互动日志(Markdown格式)
 async function downloadInteractionLog() {
-    if (!state.sessionId) {
+    // 任务#87：下载对象与报告弹窗当前展示的会话一致（历史报告优先），不回退到运行指针覆写
+    const targetSid = state.viewingReportSessionId || state.sessionId;
+    if (!targetSid) {
         alert('没有活跃的会话');
         return;
     }
 
     try {
-        const response = await fetch(`${API_BASE}/api/session/${state.sessionId}/download-log`, {
+        const response = await fetch(`${API_BASE}/api/session/${targetSid}/download-log`, {
             headers: { 'Authorization': `Bearer ${auth.token}` }
         });
         if (!response.ok) {
@@ -4474,7 +4806,7 @@ async function downloadInteractionLog() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `互动日志_${state.sessionId}.md`;
+        a.download = `互动日志_${targetSid}.md`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -4485,15 +4817,17 @@ async function downloadInteractionLog() {
     }
 }
 
-// 下载文本报告
+// 下载文本报告（服务端简略版；当前 UI 未绑定，保留兼容）
 async function downloadTextReportFromServer() {
-    if (!state.sessionId) {
+    // 任务#87：与报告弹窗一致，取当前查看的报告会话（历史报告优先）
+    const targetSid = state.viewingReportSessionId || state.sessionId;
+    if (!targetSid) {
         alert('没有活跃的会话');
         return;
     }
 
     try {
-        const response = await fetch(`${API_BASE}/api/session/${state.sessionId}/download-report-text`, {
+        const response = await fetch(`${API_BASE}/api/session/${targetSid}/download-report-text`, {
             headers: { 'Authorization': `Bearer ${auth.token}` }
         });
         if (!response.ok) {
@@ -4504,7 +4838,7 @@ async function downloadTextReportFromServer() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `评估报告_${state.sessionId}.txt`;
+        a.download = `评估报告_${targetSid}.txt`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);

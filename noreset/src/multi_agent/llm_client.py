@@ -7,6 +7,7 @@ import os
 import re
 import time
 import json
+from functools import lru_cache
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 
@@ -1250,10 +1251,17 @@ LEVEL_TONE_WORDS = {
     5: "几乎是压着火",
 }
 
-# 场景物件槽位 {obj}：从场景描述里抓关键词，抓不到用通用兜底（保证语句仍通顺）
+# 场景物件槽位 {obj}：从场景描述里抓关键词，抓不到用通用兜底（保证语句仍通顺）。
+# 关键词表只负责「在当前情景文本里认物件」，产出的指代词一律是当下情景的回指，
+# 不允许把 A 情景的物件词带到 B 情景（带不出来的部分由 _scene_foreign 兜底过滤）。
 SCENE_OBJECT_KEYWORDS = [
     ("画", "那幅画"), ("颜料", "那盒颜料"), ("美术", "那幅画"),
     ("值日", "今天的值日"), ("劳动", "这趟活儿"), ("扫", "那把扫帚"),
+    # 任务#54：物件词按「具体→泛指」排。s8（放学勒索）原文里同时有「勒索/索要财物」
+    # 「成绩下滑」「只说作业多」，原先 作业/成绩 抢在 钱 前面，把 {obj} 认成
+    # 「那本作业」，于是台词里冒出「那本作业那点事」——那是受害者对老师找的借口，
+    # 不是这场戏的物件。具体词优先后，s8 的 {obj}=那笔钱。
+    ("勒索", "那笔钱"), ("索要", "那笔钱"), ("财物", "那笔钱"), ("零花钱", "那笔零花钱"),
     ("作业", "那本作业"), ("题", "那道题"), ("试卷", "那张试卷"),
     ("考试", "这次考试"), ("成绩", "那点分数"), ("照片", "那几张照片"),
     ("群", "班群里那几条"), ("球", "那个球"), ("座位", "那个座位"),
@@ -1266,10 +1274,660 @@ _SLOT_FALLBACK = {
     "reply": "刚才那句话",
     "obj": "这件事",
     "lv": "语气平平",
+    "sw": "把声音放平",
 }
+
+# ============================================================
+# 情景人设槽位（任务#50 方案 B）
+# ------------------------------------------------------------
+# 兜底链原本只认「倾向×档」，同一条降级台词在四个角色嘴里逐字相同，
+# 也不管当前情景里这个人设是硬气还是软弱。这里补的是**选择机制**，
+# 不是新写 600 句文案：
+#   1) 从 state.role_map[agent_id].personality 取「语气/说话风格」词（sw）与立场（stance）；
+#   2) stance 用来在既有变体池里挑**立场相容**的动作/台词/收尾（只筛不写）；
+#   3) 池里整档都不相容时，才用 5 条人设动作模板（含 {sw}）替下 openers；
+#   4) sw 作为语气前缀并进动作括注，使同一倾向在不同人设下不是一个腔。
+# 立场/物件判定全部走「先筛后筛空则回退」，任何键在任何角色都不会返回空。
+# ============================================================
+
+# 拿不到 cast 人设（自建情景、无 cast 列）时按角色给的最小语气默认词。
+# 只在无 cast 时生效；stance 记为 neutral → 不改变池的可选集合，只换腔。
+DEFAULT_STYLE_BY_ROLE = {
+    "bully": "语气发冲",
+    "victim": "声音放低",
+    "bystander_a": "认真",
+    "bystander_b": "含糊",
+}
+
+# 语气词候选门槛：纯汉字 2–4 字；身体状态类（会跟动作括注重复）不作语气词。
+_MANNER_CANDIDATE = re.compile(r"^[一-鿿]{2,4}$")
+_MANNER_SKIP = ("眼眶", "泛红", "发抖", "喘", "涨红", "流泪", "哭", "低头", "僵", "红")
+
+# 人设词立场判定（词表按「这个说法偏硬 / 偏软」归类，判不出即 neutral）。
+# 硬性词先判，且「不/没/别 + 硬词」是否定式（如 不敢主动），不算硬。
+_FIRM_MARKS = ("嘴硬", "顶撞", "不服", "拒绝", "强硬", "直接", "干脆", "吼", "威胁",
+               "恐吓", "命令", "指责", "制止", "点破", "出头", "仗义", "敢", "大声",
+               "嗓门", "护着", "有理有据", "讲道理", "质问", "冲", "急", "逞强",
+               "欺软", "凶", "狠", "损", "呛")
+_SOFT_MARKS = ("小声", "结巴", "怯", "含糊", "躲闪", "支吾", "沉默", "回避", "嘀咕",
+               "颤抖", "发抖", "欲言又止", "敷衍", "跟风", "附和", "不敢", "忍",
+               "退缩", "怕", "轻声", "装不知道", "躲", "迟疑", "心虚",
+               # 任务#64 P0-B：这两条从 `_INDIRECT_MARKS` 搬过来（凑热闹/不掺和 =
+               # 不担责的随大流，与 跟风/附和 同向），见那里注释。
+               "看热闹", "事不关己")
+# 「不敢 / 没敢 / 别想」这类否定式里的硬词不算硬
+_NEGATION_PREFIX = ("不", "没", "别")
+_NEGATABLE_FIRM_MARKS = ("敢", "出头", "大声", "讲道理", "质问", "逞强", "拒绝",
+                         # 任务#60 Minor-1 顺手补：审查实测「不凶/没威胁过谁/天不怕地不怕」
+                         # 会把否定式判成 firm（方向整体翻转）。这几条是池内/cast 里实际
+                         # 会出现的硬词，一并纳入豁免；豁免后的取向见 `_word_stance`。
+                         "凶", "狠", "损", "呛", "威胁", "恐吓", "顶撞", "嘴硬",
+                         "指责", "制止", "点破", "仗义", "质问")
+# 否定式「不凶 / 没威胁 / 不嘴硬」= 自陈不硬，按**软**处理（不是「中性」：
+# 这类人设描述的是这个人不当面压人，筛选方向应与「退让」一致）。
+_NEGATED_SOFT_WORDS = ("不凶", "没凶", "不狠", "没狠", "不损", "不呛", "没威胁",
+                       "不威胁", "不嘴硬", "不顶撞", "没顶撞", "不指责", "不制止",
+                       "不点破", "不质问", "没敢", "不敢", "不仗义", "不管事")
+# 反向例外：「天不怕地不怕 / 没在怕」里的「怕」是否定的对象，本人什么都不怕=硬气。
+# 不单列就会被 `_SOFT_MARKS` 的「怕」判成 soft（审查 Minor-1 实测的第二类误判）。
+_NEGATION_FIRM_WORDS = ("天不怕", "什么都不怕", "啥都不怕", "没在怕", "不怕事", "没怕过")
+# 「不肯服软 / 不低头 / 不认输」= 否定式的**示弱动词**，人设本身是硬气。
+# 这族词不含任何 `_FIRM_MARKS` 字面，走不到上面那条豁免，会被判 neutral（实测
+# `_word_stance("不肯服软")=neutral`），从而让自建/自定义人设的筛选整档失效。
+_NEGATED_SOFT_ACTION_WORDS = ("不肯服软", "不服软", "不肯低头", "不低头", "不肯认错",
+                              "不肯让步", "不肯退", "不肯让", "不认输", "不服输",
+                              "不肯哭", "不肯示弱", "不示弱")
+# 「当面软、背后硬」子立场（任务#60 Blocker-1 根因 A）：不亲自动口，靠递话、敲打、
+# 起哄、玩笑把压力转给别人。字面常带「笑/客气」，走 soft 会被筛成示弱腔，走 firm
+# 又会被当成当面挑衅，所以单列一档：对白里**不示弱**（同 firm 的排除口径），
+# 同时排除「当面开骂/下逐客令」那类直白挑衅句（见 `_DIRECT_CONFRONT_SPEECH`）。
+#
+# 任务#64 P0-B（审查#61 F3）两处更正：
+#   · 「看热闹」「事不关己」从本词族**移出**、并进 `_SOFT_MARKS`：凑热闹/不掺和是
+#     随大流的**弱**立场（与 跟风/附和/回避 同向），不是幕后施害手法。审查实测
+#     s5 罗飞（爱看热闹、起哄、事不关己、看热闹、煽风点火）被演成
+#     「这事我不管，那道题你怎么接是你的事」，而情景原文写的是「在旁边起哄、看热闹」
+#     ——台词与情景设定直接相反，属立场极性判错，不是风格偏好。
+#   · 加三条例性守卫 `_INDIRECT_POLARITY_EXCEPT`（下面），堵住「不起哄 / 怕被孤立 /
+#     背后替她说话」这类极性读反的词。
+_INDIRECT_MARKS = ("操控", "控制欲", "冷暴力", "暗示", "指使", "客气", "表面礼貌",
+                   "背后", "拉着人", "拉帮结派", "结伙", "串联", "递话", "传话",
+                   "敲打", "嚼舌根", "排挤", "孤立", "使眼色", "阴阳怪气",
+                   "调侃", "玩梗", "恶搞", "嬉皮笑脸", "分寸", "起哄",
+                   "煽风", "笑着", "笑里")
+
+# indirect 词族的三条例外（任务#64 P0-B；PM 定的「加否定/极性守卫」）：
+#   E1 「被孤立 / 怕被排挤」描述的是**受害处境**（谁在孤立他），不是这个人的施害手法。
+#   E2 「背后替她说话」是暗中**相助**，方向与施轧相反。
+#   E3 「不起哄」是否定式，语义是「不参与」，不等于「暗中参与」。
+# 三条只**取消 indirect**，然后照原判定链继续往下走 soft：
+# 「怕被孤立」由 `_SOFT_MARKS` 的「怕」承接成 soft；「不起哄」「背后替她说话」没有软词
+# ⇒ neutral。不给它们发明新类别，也不把「有立场但不施害」误升成 firm。
+_INDIRECT_POLARITY_EXCEPT = (
+    re.compile(r"(?:被|遭|怕|担心|害怕|生怕)\s*(?:人)?\s*(?:孤立|排挤|冷落|针对|笑话)"),
+    re.compile(r"(?:替|帮|给)[一-鿿]{1,2}\s*(?:说话|说一句|说两句|讲话|出头)"),
+    re.compile(r"[不别没未少]\s*(?:太|很|那么|跟着|随意)?\s*(?:起哄|凑热闹|看热闹|操控|"
+               r"排挤|孤立|传话|递话|敲打|嚼舌根|煽风|暗示|指使|使眼色|拉帮结派|结伙|"
+               r"串联|冷暴力|调侃|玩梗|恶搞|阴阳怪气)"),
+)
+
+
+
+def _word_stance(word: str) -> str:
+    word = (word or "").strip()
+    if not word:
+        return "neutral"
+    # 「天不怕地不怕 / 没在怕」是否定式里的**硬**（什么都不怕），单列一档，
+    # 不按「怕」字判软。审查 Minor-1 实测这条原本被判成 soft。
+    if any(fix in word for fix in _NEGATION_FIRM_WORDS):
+        return "firm"
+    if any(fix in word for fix in _NEGATED_SOFT_ACTION_WORDS):
+        return "firm"
+    if any(neg in word for neg in _NEGATED_SOFT_WORDS):
+        return "soft"
+    for mark in _FIRM_MARKS:
+        if mark not in word:
+            continue
+        if mark in _NEGATABLE_FIRM_MARKS and any(
+                p + mark in word for p in _NEGATION_PREFIX):
+            continue
+        return "firm"
+    # 硬词判不出，再看「当面软、背后硬」这一档（必须排在 soft 之前：
+    # 「背后嚼舌根」「冷暴力」字面含蓄，落到 soft 就把操控型人设演成示弱型）。
+    # 任务#64 P0-B：命中幕后词族但落入三条例性守卫（受害处境 / 暗中相助 / 否定式）时
+    # **不判 indirect**，继续往下走 soft——这样「怕被孤立」仍按处境判软，
+    # 「不起哄」「背后替她说话」若无软词就是中性。
+    if any(m in word for m in _INDIRECT_MARKS) and not any(
+            rx.search(word) for rx in _INDIRECT_POLARITY_EXCEPT):
+        return "indirect"
+    if any(m in word for m in _SOFT_MARKS):
+        return "soft"
+    return "neutral"
+
+# 动作括注（openers）的立场标记
+_SOFT_ACTION_MARKS = ("低着头", "垂着眼", "缩", "躲", "往后", "退到", "退了", "不敢",
+                      "盯着桌面", "眼睛盯着", "绞着", "攥", "衣角", "咬着唇",
+                      "声音很小", "声音很轻", "很轻", "吞吞吐吐", "飘忽", "别过脸",
+                      "避开视线", "规规矩矩", "抹了", "红了", "抖", "停住", "咽回去",
+                      "低下", "小声", "怯", "收了收", "慢慢把")
+_FIRM_ACTION_MARKS = ("抬了抬下巴", "仰着", "瞪", "站直", "逼", "按住", "拦住", "指着",
+                      "挡了", "直视", "让开", "提高声音", "环顾", "拍了", "正对着",
+                      "转向门口", "清了清嗓子", "凑近", "往前", "没动", "斜着眼",
+                      "挤挤眼", "一蹭", "一扔", "靠", "转")
+
+# 台词正文/收尾的软弱标记（s8 那类「硬气受害者」兜底时该避开的句子）。
+# 口径与 test_evidence/scenario_persona_audit_20261114 的 VOCAB["victim_soft"] 对齐，
+# 另补池内实际出现的示弱句式。
+_SOFT_SPEECH_MARKS = ("低头", "忍着", "不想说话", "不想多说", "不想多讲", "不开口",
+                      "不太会说", "不说了可以了吧", "算了", "我认", "不敢", "沉默",
+                      "眼眶", "往后", "小声", "求你", "撑不住", "认倒霉", "就这样吧",
+                      "不如闭嘴", "不辩解", "一句都不辩", "忘了吧", "别追问", "我收回",
+                      "不争了", "随便你们", "都是我", "我行", "别催",
+                      # 池里另外几条示弱句（上一轮漏网：「不想开口」不含子串「不开口」）
+                      "不想开口", "不打算接", "先不说了", "安静待", "不插话", "别点我名",
+                      "都不想回", "不认也不辩", "我没什么事", "我听着就行", "再安静一会儿",
+                      # 任务#64 P1-E（审查#61 F2 的根）：#63 Q4.1 人工剔出的 **9 句真
+                      # 示弱**特征词。这 9 条是「语义口径判得出、生产谓词判不出」的差集
+                      # （48 条残留全部落在 s8 硬气受害者 `withdraw@L3/L4/L5`，每格 40 个
+                      # 序号命中 16 次）。补进来之后 firm/indirect 格里这些句子被 `_ok`
+                      # 筛掉、由兄弟档/本倾向库窗口补底，**不是回填**（#54 根因 B 的老路）。
+                      # 池深影响实测：最小池 48 → 80（本批同时落 P0-A 的窗口化，
+                      # 单看补词的削减见 rework_64/README.md 的 P1-E 节）。
+                      "我不要了", "都给你们", "别再说了", "别说我了", "难受", "更糟",
+                      "不想辩", "请你别", "不喜欢被这样讲")
+
+# 情景限定词（道具 + 动作/时间/地点）。兜底池按「倾向×档」写，里面残留了个别情景
+# 的道具与场境（画画/本子/值日/宿舍/一大早上…）。渲染时若这些词**没有**字面出现在
+# 当前情景文本里，就跳过含它的变体——「禁止跨情景」由此成为可验证的硬约束。
+# 口径：只收「换了场景就不成立」的具体物/动作/时段；机构名（办公室）与泛指（桌子）
+# 由下面的「无命中则回退」保护，宁可少筛，不可筛空。
+_SCENE_SPECIFIC_WORDS = (
+    # 道具
+    "画画", "涂涂画画", "画笔", "颜料", "美术", "本子", "作业本", "草稿纸",
+    "扫帚", "黑板", "被窝", "肚子疼", "班级群", "班群", "表情包", "照片", "视频",
+    "零花钱", "篮球", "足球", "举起来", "书包", "作业", "勒索", "索要",
+    "群里", "群聊", "手机", "微信",
+    # 地点
+    "宿舍", "操场", "食堂", "教室", "走廊", "楼梯", "厕所", "校门口", "门口", "座位",
+    # 时段/活动
+    "一大早", "一早", "早上", "早晨", "中午", "下午", "晚上", "夜里", "半夜", "熄灯",
+    "起床", "睡觉", "上学", "放学", "课间", "自习", "值日", "午饭", "早饭", "晚饭",
+    "上课", "下课", "第一节课", "问卷",
+)
+
+# 任务#54 追加：**活动断言**门禁。道具词只看「这个词有没有在情景文本里出现过」，
+# 挡住不了这一类串景——「放学路上的威胁」原文里有「只说作业多、压力大」（受害者对
+# 老师找的借口），于是「（从作业里抬起头，看了一眼）」被字面口径放行，可校门口没有
+# 人摊着作业本。台词/括注里出现「作业、在写、继续写、画家、画画」这类词等于断言
+# **此刻正在做这件事**，必须拿情景里的活动证据来支撑，光把它当话题提起不算证据。
+# 证据词只描述活动本身，不写具体情景名，8 套内置情景与自建情景走同一条口径。
+_WRITING_EVIDENCE = ("写作业", "补作业", "抄作业", "交作业", "收作业", "课堂作业",
+                     "家庭作业", "作业本", "做题", "默写", "听写", "卷子", "作文", "笔记")
+_ART_EVIDENCE = ("画", "美术", "绘画", "涂鸦")
+_SCENE_ACTIVITY_GATE = (
+    ("作业", _WRITING_EVIDENCE),
+    ("在写", _WRITING_EVIDENCE),
+    ("还写着", _WRITING_EVIDENCE),
+    ("继续写", _WRITING_EVIDENCE),
+    ("写东西", _WRITING_EVIDENCE),
+    ("画家", _ART_EVIDENCE),
+    ("画画", _ART_EVIDENCE),
+    ("涂涂画画", _ART_EVIDENCE),
+    ("画笔", _ART_EVIDENCE),
+    ("颜料", _ART_EVIDENCE),
+    ("美术", _ART_EVIDENCE),
+)
+_ACTIVITY_MARKERS = tuple(m for m, _ in _SCENE_ACTIVITY_GATE)
+# 已交给活动门禁的词不再走字面口径（否则「作业」在 s8 里会被自己的字面放行）
+_SCENE_PROP_WORDS = tuple(w for w in _SCENE_SPECIFIC_WORDS if w not in _ACTIVITY_MARKERS)
+
+# 整档动作都与人设立场相同时才启用。
+# 任务#64 P0-A：条数从 5 提到 **9 = 3 组 × 3 条**。`_tendency_window` 要把库按倾向切成
+# **互不相交**的窗口（组号 = 26 键排序序号 % 组数，窗口大小 = `_MIN_FIRM_SEGMENTS`），
+# 只有 `len(lib) % 窗口 == 0` 时窗口才真正互斥 ⇒ 「同一格里两个倾向共享动作段」的
+# 通道被结构性关掉（评测：`test_evidence/integration_check_20261115/rework_64/
+# out/q9_sweep3.log` 的 N2 行 = cells 0 / pairs 0）。改前 5 条切不出 3 组互斥窗口
+# （5 // 3 = 1 ⇒ 所有倾向共用整库），这是「成员级差异化」做不到的直接原因。
+_PERSONA_FIRM_OPENERS = [
+    "（{sw}，没退半步）",
+    "（{sw}，抬眼盯着对方）",
+    "（{sw}，两手在身侧握紧）",
+    "（{sw}，把话头接住了）",
+    "（{sw}，往前站了半步）",
+    # ↓ 任务#64 P0-A 新增（补足 3 组 × 3 条；文案判据见 probes/q11_p0a_copy_check.py）
+    "（{sw}，两只手撑着腰）",
+    "（{sw}，直直地看回去）",
+    "（{sw}，先把话说在前头）",
+    "（{sw}，把脚从桌下抽出来站直）",
+]
+_PERSONA_SOFT_OPENERS = [
+    "（{sw}，手抓着衣角）",
+    "（{sw}，眼睛垂下去）",
+    "（{sw}，往旁边挪了半步）",
+    "（{sw}，先把话咽了一下）",
+    "（{sw}，肩膀一直绷着）",
+]
+
+# 任务#64（P0-B 的连带洞）：**soft 立场原来一条带锚点的收尾都没有**。
+# 26 键池子里 follow_majority / observe_quiet / wait_observe 这类倾向的 `tails`
+# 全是「……我这也是随口一说，别当真是我起的头」这种不带 `{obj}`、也不带情景限定词
+# 的通用句 ⇒ 剥掉动作括注后，同一格在 8 个情景下**逐字相同**（`test_c3` 的口径），
+# 而且一次会话里可见收尾只有池里那 4–5 条（B-1 验收线「收尾去重 ≥12」直接不达标）。
+# 改前之所以看不出来，是因为 s2/s5 的 bystander_b 被误判成 indirect、走了 firm/indirect
+# 分支的锚点收尾合并；P0-B 把它落回 soft 之后，8/8 情景撞满 ⇒ 老洞暴露。三个时间点
+# （取证 `probes/q17_c3_scope.py`，口径 = 剥掉动作括注后 8 情景逐字相同的格数）：
+#   开工前 0 格（20 倾向/1600 格）→ P0-B 落码后、补本库前 **102 格**（当时探针只覆盖
+#   6 倾向/480 格，全部 soft、其中 36 格收尾零锚点）→ 补本库后 0 格（两侧同一全量口径）。
+# 所以这条不是 P0-B 引入的缺陷，是 P0-B 让已有缺陷第一次可测。
+# 口径与 firm/indirect 完全一致：**只补收尾**（`{obj}` 进收尾、不进台词段，避免
+# `_echo_grade` 判共用槽位而削减组合），原池里本来就带锚点的收尾仍排在库句之前。
+_PERSONA_SOFT_TAILS = [
+    "{obj}……我能不说吗，我不想在这儿讲这个。",
+    "别问{obj}了，我就想让这事就这么过去。",
+    "{obj}我记住了，回去自己慢慢想，不在这儿说。",
+    "关于{obj}，我还没想好怎么说，先让我缓一下。",
+    "{obj}……我嘴上不拦，心里其实一点都不想这样。",
+    "你们说的{obj}，我一句都没敢接。",
+    "{obj}我先收着，等没人的时候再说。",
+    "{obj}这事我不想争，争了也没人听我的。",
+    "别再提{obj}了好吗，我耳朵里已经全是声儿了。",
+    "{obj}……是我没看住它，这一条我不辩解。",
+    "你要我当着大家说{obj}，我真的说不出口。",
+    "{obj}我不藏，也不敢碰，就让它在那儿待着。",
+]
+
+# 「沉默/观望」类倾向的池子整档都是示弱句：硬气人设走到这类倾向时，若筛选后
+# 一句不剩，只换语气前缀等于没换（_keep 会整档回退）。这里补几组**独立成句、
+# 语气不示弱**的替代句。
+# 任务#60（Major-4）：启用条件与注释对齐——**只有该档被立场筛空时**才拿它替换原池，
+# 原池非空时一个字都不追加（以前非空也照贴，实测 wait_observe@L2 全池 78% 是库句）。
+# apologize/thank_*/back_off/support_* 这些「行为本身就是软/是认错」的倾向不在此列，
+# 避免人设盖过倾向语义。
+#
+# 任务#64 P0-A：上面那句「启用条件」现在由 `_segments` 里的 `keep_lines == []` 直接
+# 判定，**不再看倾向名**，所以 `_FIRM_SWAP_TENDENCIES` 这个名单已经不参与取号
+# （取证：`test_evidence/integration_check_20261115/rework_64/README.md` 的「分歧」节）。
+# 保留常量只为测试与文档能继续指认「哪几个倾向的整池本来就是示弱句」，改名或删除
+# 都会牵动 26 键之外的断言面，故不动。
+# 同时，库条数从 5 提到 **12（台词/收尾）/ 9（动作）**：`_tendency_window` 要按倾向
+# 切互不相交的窗口，5 条切不出多组 ⇒ 「成员级差异化」在旧条数下做不到。
+#
+# 任务#60 锚点约定（B 与 C4 必须同时成立，别改这段的分工）：
+#   · **收尾库（*_TAILS）每条都带 `{obj}`**——收尾参与每一次组合，所以任何一条
+#     产出里都至少有一段随情景变化，「同一 (角色,倾向,档,序号) 8 情景正文逐字相同」
+#     由此消失（旧库句不含任何情景成分，`_scene_foreign` 门禁完全管不到它们）。
+#   · **台词库（*_LINES）一律不带 `{obj}`**——`_echo_grade` 把「两段共用同一个动态
+#     槽位」判成硬重复并剔出池，台词和收尾都带 `{obj}` 时几乎整池被剔；实测 s8 硬气
+#     受害者 withdraw@L2 的可选组合被压到 6 条（= `_MIN_COMBOS` 下限），20 轮会话
+#     第 7 次取号就回绕，等于把根因 B 修成 #54 的逐字复读缺陷。
+#   · 库句全部是完整句，不许再出现「你{lv}也好，…」那类没有谓语的残句（#54 教训）。
+_FIRM_SWAP_TENDENCIES = ("endure_quietly", "wait_observe", "observe_quiet")
+_PERSONA_FIRM_LINES = {
+    "low": [
+        "这话我不接，接了倒像我理亏，你们换个说法再来。",
+        "{reply}我一字一句都听见了，只是不照着你们的调子答。",
+        "我现在把话收着，是想先把这一页按住，不陪你们耗。",
+        "我这儿有本账，用不着当众翻来覆去讲。",
+        "该我做的事一件没少做，你们要讲理就把话讲明白。",
+        # ↓ 任务#64 P0-A 新增：台词库 5 → 12 = 4 组 × 3 条（互不相交的倾向窗口）
+        "我站在这儿听你们讲完，不代表你们讲的就是对的。",
+        "你们几个人一条声，也不等于这条声里有理。",
+        "我不跟你们比谁的嗓门大，比嗓门大不顶事。",
+        "我的事我自己接，你们要讲理我就站着听完。",
+        "我把话收着是收着，不是没听见，别搞错了。",
+        "你讲的这些我自己会核，核完再回你。",
+        "我不抢话，但也一句没打算让步。",
+    ],
+    "high": [
+        "你们再逼一句，就不是我把话收着，是话收不住了。",
+        "{reply}你也别当着我面重复，这回我保证接得住。",
+        "我把话压到这么低，是给这场合留面子，不是给你们留。",
+        "今天我这边不谈，谁催我我也不谈。",
+        "要讲理就摆到台面上讲，别用这种调子压人。",
+        # ↓ 任务#64 P0-A 新增
+        "我再让一句，你们就要我让到没地方站，这一条我不让。",
+        "我把话说重些，是为了待会儿没人说我从来没提醒过。",
+        "你们要试我的底线，就一件一件来，别拿一堆小事压。",
+        "我不动手，也不许谁把这笔账记到我头上。",
+        "这会儿我把话讲死，再往前一步就没有回旋的余地。",
+        "你今天讲的每一句我都记着，回头有人问我照这个答。",
+        "我这儿不给面子，是给不起，不是不想给。",
+    ],
+}
+_PERSONA_FIRM_TAILS = {
+    "low": [
+        "……我不是没话，{obj}这事不想在这种场合上说。",
+        "{obj}我先记着，什么时候翻这本账，由我来定。",
+        "{obj}我少说一句是一句，你们别当成我退了。",
+        "{obj}的话我先到这儿，剩下的看你们怎么接。",
+        "{obj}我不在这儿掰扯，回头一样能讲清楚。",
+        # ↓ 任务#64 P0-A 新增：收尾库 5 → **15**。收尾**不按倾向分组**（全倾向共用、
+        #    只按 (倾向,角色) 轮转起点），它管的是「一次会话内收尾去重 ≥12」这条
+        #    PM 验收线：9 条时全网格 min=10、10 条 min=11、12 条 min=12（正好贴线）、
+        #    15 条 min=14（再往上被 40 抽的取号数封顶，18 条仍是 14）。
+        #    取证：out/q9_sweep4.log 的 X1–X3、out/q11b_firm_tail_depth.log。
+        "{obj}这件事我看的是理，不是你们几个人。",
+        "{obj}我留在原处，谁要动它先问我一句。",
+        "关于{obj}，我要说的就这一句，剩下的我留着。",
+        "{obj}的账我自己会算，用不着你们替我记。",
+        "你们爱怎么讲{obj}就怎么讲，我这儿不改口。",
+        "{obj}我先放一边，今天这口气我不接。",
+        "{obj}的事我不求谁，也不欠谁。",
+        "{obj}这一处我不改口，改口的是先开口的那一位。",
+        "{obj}我留在这儿，谁要拿走，当着人拿。",
+        "{obj}我不躲，也不替谁圆。",
+    ],
+    "high": [
+        "……{obj}我要真开口，就不是这个调子了。",
+        "{obj}你们先收一收，这种话我只说一次，再说就是不客气。",
+        "{obj}我不吵这一架，但我也没打算让。",
+        "{obj}到这儿为止，再往下就不是我说的话了。",
+        "{obj}后面要怎么接，你们自己掂量，我不替你们想。",
+        # ↓ 任务#64 P0-A 新增
+        "{obj}今天谁先动它，我就先跟谁把话讲清楚。",
+        "{obj}我不藏，也不给你们拿去当话柄。",
+        "你要拿{obj}说事，就当着人说完，别半句半句地挤。",
+        "{obj}这件事我记到今天为止，明天怎么算我说了算。",
+        "我先把{obj}放下，不是让着谁，是懒得在这种地方讲。",
+        "{obj}谁来问我怎么答，我不回避这一条。",
+        "关于{obj}，我只讲我看到的，别的不替谁编。",
+        "{obj}我今天不挪地方，谁来问我都站在这儿答。",
+        "{obj}你们轮流说，我只回一句：放回原处。",
+        "{obj}这事我不催，谁急谁自己来找我。",
+    ],
+}
+
+# 任务#60（Blocker-1 根因 A）：立场=indirect（表面礼貌/背后操控/冷暴力/暗示/指使/
+# 拉帮结派/起哄那类「当面软、背后硬」人设）专用的「借手、递话、敲打」句族。
+# 用户原话要求 s6 霸凌者「不是主动言语挑衅，而是表面礼貌、背后操控从众旁观者孤立」——
+# 原池里全是当面开口的话，故补这一族；锚点分工同 firm 库（`{obj}` 只进收尾）。
+_PERSONA_INDIRECT_OPENERS = [
+    "（{sw}，把话头递给旁边的人）",
+    "（{sw}，眼睛扫了一圈没看对方）",
+    "（{sw}，声音不高也不低）",
+    "（{sw}，先笑了一下才开口）",
+    "（{sw}，站到人群边上）",
+    # ↓ 任务#64 P0-A 新增（9 = 3 组 × 3 条，与 firm 库同一窗口口径）
+    "（{sw}，往人堆里侧了侧身）",
+    "（{sw}，嘴角带着一点笑）",
+    "（{sw}，把手背到身后）",
+    "（{sw}，只把眼睛往旁边一挪）",
+]
+_PERSONA_INDIRECT_LINES = {
+    "low": [
+        "我没当面讲过谁，这话传到哪儿去，不赖我。",
+        "你自己琢磨琢磨，我说了不算，别人怎么想我也管不了。",
+        "我不拦谁跟你玩，大家心里各自有杆秤。",
+        "{reply}我听着呢，不过这事儿得问别人，别来问我。",
+        "我这个人不当面说人，别人那会儿怎么想，我也替不了。",
+        # ↓ 任务#64 P0-A 新增（12 = 4 组 × 3 条）
+        "我没当着谁的面讲过狠话，这话从哪儿来的你查哪儿。",
+        "我点了个头，不代表我说过什么，这话别算在我头上。",
+        "大家都在这儿站着，我一个字都不用说。",
+        "我这儿没传过话，谁传的谁自己去对。",
+        "我只说一句中立的话，后面怎么接是别人的事。",
+        "你要问我刚才讲了什么，我就讲了那么一句。",
+        "我不拦谁跟你说话，也不劝谁别理你。",
+    ],
+    "high": [
+        "话我不能当面讲，总有人替我去讲，我犯不上开口。",
+        "你到底哪儿不对，你去挨个问一圈，看谁敢当着我面说。",
+        "我没动过你，是别人不肯跟你走，这结果我能怎么办。",
+        "{reply}我再听一遍也没用，这账不是我一个人记的。",
+        "我要当面跟你吵倒简单了，用不着我亲自说这一句。",
+        # ↓ 任务#64 P0-A 新增
+        "我说一句客气话，别人自然知道怎么接，用不着我重复。",
+        "我从不催谁，是你们自己一个个退到那儿去的。",
+        "你要怪，先去怪那些只听了我半句话的人。",
+        "我把话说得客客气气，是给你留余地，你别不领。",
+        "我要真想怎么样，就不会站在这儿跟你讲这些。",
+        "别人的嘴我管不着，我也没打算管。",
+        "这事到我这里只是闲话，怎么走样的不是我能定的。",
+    ],
+}
+_PERSONA_INDIRECT_TAILS = {
+    "low": [
+        "……{obj}你别往我心里去，我什么都没说过。",
+        "谁在背后讲的不重要，{obj}你自己知道就行。",
+        "{obj}我不当众讲，回头有人跟你提，你别说是我。",
+        "这事我不管，{obj}你怎么接是你的事。",
+        # ↓ 任务#64 P0-A 新增（12 条：会话内收尾去重 ≥12 的验收线）
+        "……{obj}的事我不提第一遍，别人提的时候你别想起我。",
+        "{obj}我碰都没碰，谁看见的谁自己讲。",
+        "你要问{obj}到哪儿去了，我这儿没有答案。",
+        "{obj}的事我听着，不接话，也不拦谁接话。",
+        "{obj}我不当众讲，散了自己琢磨去。",
+        "别人要拿{obj}做文章，做成做不成不关我的事。",
+        "{obj}这一条我只笑一下，剩下的你们自己接。",
+        "我不管{obj}最后归谁，不管就是不管。",
+    ],
+    "high": [
+        "……{obj}的事我不提第二遍，自然有人替我提。",
+        "你要找说话的人自己去找，{obj}不是我挑的头。",
+        "{obj}后面怎么算，别人有别人的办法，用不着我开口。",
+        "话到这儿为止，{obj}后面传成什么样我不管。",
+        # ↓ 任务#64 P0-A 新增
+        "{obj}最后归谁，我不用自己开口，有人替我分。",
+        "……{obj}的事我不盯着，自然有人替我盯着。",
+        "你要跟{obj}过不去，先看看周围有谁在笑。",
+        "{obj}到我这儿只是句闲话，到哪儿变成别的我不管。",
+        "我不动{obj}，我只让它换个地方待着。",
+        "{obj}这事你问到第三遍，答案就不在我嘴里了。",
+        "别把{obj}算到我头上，我没那么大的面子。",
+        "……{obj}的结果你自己接，我只是没拦。",
+    ],
+}
+
+# 任务#60-2（PM 裁定 2）：indirect 库句按**角色**分族。
+# 上面那族「我没当面讲过谁 / 回头有人跟你提，你别说是我 / 用不着我开口」是
+# **幕后递话、借手、撇清**——霸凌者（s4/s6）与从众旁观者（s2/s5）用它是对的
+# （PM 口径：从众做这类句子可以接受）。但 `_stance_lib` 原本不按角色分库，
+# 于是只要人设判成 indirect，正义旁观者也会整档借到这一族：
+# 「（先把话接过来）我没当面讲过谁，这话传到哪儿去，不赖我」——正义旁观者不做
+# 幕后操控，这是语义错格（presets 32 格里没有 bystander_a 的 indirect 格，但
+# 自定义参与者/自建情景 cast 的 traits 由用户填写，「说话客气」这类写法就会落
+# indirect，取证见 test_evidence/.../rework_60/probes/p6_indirect_by_role.out）。
+# 最小修复：只给 bystander_a 换成「打圆场、替人说话、但话是当面讲的」这一族；
+# firm/soft 库、26 键词表、操控族本身都不动。池成员仍只由
+# (倾向,档,角色,情景,立场) 决定 ⇒ 不违反 #54-7（角色本来就在键里）。
+_INDIRECT_MEDIATE_OPENERS = [
+    "（{sw}，站到两人中间）",
+    "（{sw}，先把话接过来）",
+    "（{sw}，朝两边看了看）",
+    "（{sw}，把手抬起来示意停一下）",
+    "（{sw}，把声音放稳）",
+    # ↓ 任务#64 P0-A 新增（9 = 3 组 × 3 条）
+    "（{sw}，把两只手往下按了按）",
+    "（{sw}，站到说话的人跟前）",
+    "（{sw}，先朝被围着的人点点头）",
+    "（{sw}，把围着的圈让开一条缝）",
+]
+_INDIRECT_MEDIATE_LINES = {
+    "low": [
+        "这事我当面说一句：他刚才讲的不是假话，你们也都听见了。",
+        "我要是哪里说错了，你可以当面指出，不用绕着说。",
+        "先把手上的事放一放，有话当面讲清楚，别在背后传。",
+        "{reply}我刚那句是当着大家说的，没什么不能重复的。",
+        "你要听道理，我就把道理摆在这儿，谁对谁错大家自己判断。",
+        # ↓ 任务#64 P0-A 新增（12 = 4 组 × 3 条）
+        "我把两边的话都当面学一遍，谁讲的谁听见，我不加工。",
+        "我不在背后议谁，要议就当着他的面议。",
+        "他这半天没吭声，你们就当没这个人，这话不公平。",
+        "我先把这儿稳住，谁对谁错等会儿自然有说法。",
+        "我帮谁不绕弯子，就在明面上帮。",
+        "有话冲着我讲，别绕到别人耳朵里去。",
+        "刚才那一下我看见了，是谁先起的头我心里有数。",
+    ],
+    "high": [
+        "我把话搁在这儿：他刚才说的每一句，我都能当着一屋子人讲清楚。",
+        "谁对谁错不用猜，刚才那一下大家都看见了。",
+        "我不替他瞒，也不由着谁替他编。",
+        "要讲理就现在讲，我这儿不是传话的地方。",
+        "{reply}老师要是问起来，我就照刚才看到的说，不改口。",
+        # ↓ 任务#64 P0-A 新增
+        "我今天站在这儿，就是把刚才看到的讲完，不改口。",
+        "我不怕得罪谁，我怕的是这件事没人说一句公道话。",
+        "你们要讲规矩，那就先讲讲是谁先动的手。",
+        "我把话放在这里，谁要否认就当面来否认。",
+        "谁对谁错我不判，我只把我看见的那一段讲完。",
+        "要吵可以，先把刚才那段当着大家重说一遍。",
+        "我讲理，也跟讲理的人讲，不讲理的我不接。",
+    ],
+}
+_INDIRECT_MEDIATE_TAILS = {
+    "low": [
+        "{obj}我先替他收着，等会儿当面一起说。",
+        "……{obj}这事我记着，等会儿老师问我就照这个说。",
+        "{obj}我不动手，我只把刚才看到的讲出来。",
+        "你们要动{obj}，先跟我说一声，别趁没人看见。",
+        # ↓ 任务#64 P0-A 新增（12 条：会话内收尾去重 ≥12 的验收线）
+        "{obj}我先放回去，谁丢的谁自己来拿。",
+        "……{obj}这事我替两边各留一句，不添油。",
+        "{obj}要是要不回来，我陪你一道去讲。",
+        "我不动{obj}，我拦的是伸手的人。",
+        "{obj}这件事今天能了，就别留到明天再翻。",
+        "你们为{obj}争执，我先把它摆到中间。",
+        "{obj}我先记下谁来拿过，别到时候互相指。",
+        "……{obj}归谁我不判，我只讲是谁先放的。",
+    ],
+    "high": [
+        "{obj}的账当着大家算，别在谁耳朵边上单讲。",
+        "……{obj}我先拿走，省得有人借它做文章。",
+        "{obj}这事我明天当着全班重新走一遍流程。",
+        "{obj}归{obj}，谁做的谁认，我不替谁扛。",
+        # ↓ 任务#64 P0-A 新增
+        "{obj}的事我现在就讲清楚，讲完了谁也别再翻。",
+        "谁要拿{obj}说人，先把我一起算上。",
+        "{obj}我今天看着，明天也看着，不用谁提醒。",
+        "……{obj}这条线我画在这儿，越不过去。",
+        "{obj}该给谁就给谁，不当面说定的不算数。",
+        "我把{obj}收起来，是给这件事留个体面。",
+        "{obj}要讲理，我奉陪讲到底，不躲这一场。",
+        "你们要动{obj}，先当面问过大家，别私下里定。",
+    ],
+}
+# 角色 → indirect 族。
+# 任务#60-3（PM 2026-11-15 裁定 3）：`victim` 也门控，但**不新建第四个句库**——
+# 受害者走 `"firm"`，即直接复用现有 firm（不示弱）库。理由：「回头有人跟你提，
+# 你别说是我」「我没当面讲过谁，不赖我」这类幕后递话/撇清句是**施轧者的工具**，
+# 不是受害者的；用户原话「性格要来自情景描述且角色之间要有差异」，一个「说话客气/
+# 背后替她说话」型受害者被人设判成 indirect 后原样借到操控族，就是语义错格
+# （取证：probes/p8_victim_indirect_firm.out 的改前 6 条样本）。
+# 代价（明确写下来，别当没发生）：受害者的「当面不说、背后记仇」这层语用细节会被
+# 丢成「不示弱」——换来的是「不会说出不属于该角色的话」。之所以不为此单独建库：
+# 句库越多，跨情景重复与池深（#54-7 / PM 定案的最小池 ≥ 会话跨度）越难守。
+# 语气词前缀这一路不变：`{sw}` 仍由 `_manner_compatible` 拦住不相容的动作括注。
+_INDIRECT_FAMILY_BY_ROLE = {"bystander_a": "mediate", "victim": "firm"}
+# 任务#64 P2-F（审查#61 F5）：「谁可以拿幕后递话/撇清族」改成**白名单**。
+# 旧实现是 fail-open——`_indirect_lib` 的默认分支返回操控族，于是 `agent_id` 只要
+# 不在门控表里（`""`、`teacher`、`custom_xxx`、`Bystander_A` 这类大小写变体）就
+# 默认被判成「可以暗中散布消息的学生」。当前不可达（发言队列硬编码 4 个 role，
+# 自定义参与者并入既有 role key），所以它是埋雷而不是现行缺陷——修法也只按埋雷的
+# 尺寸来：**只加一道白名单，不扩面**（不动 `web/app.py` 的入参校验，那是非目标文件）。
+_COVERT_FAMILY_ROLES = ("bully", "bystander_b")
+
+
+def _indirect_lib(bucket: str, agent_id: str = ""):
+    """返回 (台词库, 收尾库, 动作库)：正义旁观者用「打圆场」族，受害者用现有 firm 库
+    （任务#60-3，不示弱、不幕后），霸凌者/从众旁观者沿用借手递话族。
+
+    任务#64 P2-F：不在白名单里的 role（含空 role、`teacher`、自建 `custom_*`）
+    回落 `"mediate"`（当面讲道理、不幕后），不再默认借到操控族。
+    """
+    family = _INDIRECT_FAMILY_BY_ROLE.get(agent_id)
+    if family is None:
+        family = "covert" if agent_id in _COVERT_FAMILY_ROLES else "mediate"
+    if family == "mediate":
+        return (_INDIRECT_MEDIATE_LINES[bucket], _INDIRECT_MEDIATE_TAILS[bucket],
+                _INDIRECT_MEDIATE_OPENERS)
+    if family == "firm":
+        return (_PERSONA_FIRM_LINES[bucket], _PERSONA_FIRM_TAILS[bucket],
+                _PERSONA_FIRM_OPENERS)
+    return (_PERSONA_INDIRECT_LINES[bucket], _PERSONA_INDIRECT_TAILS[bucket],
+            _PERSONA_INDIRECT_OPENERS)
+
+
+# 「当面开干」的动作/台词标记（indirect 立场要避开的）。口径只取「当面威逼、当众
+# 贬低、下逐客令」这类显式特征，宁可少筛：筛空时 `_keep` 整档回退，不会把句子删没。
+_DIRECT_CONFRONT_ACTIONS = ("斜着眼", "指着", "拍了", "按住", "拦住", "挡了", "往前",
+                            "凑近", "逼", "瞪", "抬了抬下巴", "仰着", "没动", "提高声音",
+                            "转向门口", "一蹭", "一扔", "环顾", "晃过来", "捏紧")
+_DIRECT_CONFRONT_SPEECH = ("再说一遍", "试试", "找打", "滚", "闭嘴", "不服",
+                           "算什么东西", "就你这样", "也配", "心里没数", "谁站你那边",
+                           "谁理你", "少来", "给我", "道歉", "认罚", "拿来", "找老师",
+                           "告诉你家长", "欠收拾", "冲我来", "再说一句", "别太过分",
+                           "摆平", "收拾", "识相", "趣儿", "敢应",
+                           # 实测漏网的「当面贬低 / 当面叫板」句式（s6 霸凌者改前产出）
+                           "没点数", "顶三句", "还跟我犟", "当回事", "那种眼神",
+                           "较真", "随你折腾", "这点本事", "也就剩", "白搭",
+                           "谁说了算", "还想被夸", "一般见识", "要不要脸",
+                           "别逗了", "你自己信吗", "听不懂人话", "说第二遍",
+                           "脸就红", "挺好玩", "说两句", "哪儿都好",
+                           # 任务#64 P0-C（审查#61 F1/验收#62 第 2 项）：**统一口径**。
+                           # #62 用 `a62_item2_classify.py` 的 X/Y/Z 规则判「当面贬损 /
+                           # 主动挑衅 / 当众威压」，而本表是生产侧唯一的筛句谓词——两者
+                           # 不同源，于是 indirect 格里留下的句子「生产谓词判得出没问题、
+                           # 评审口径判越线」（s6 霸凌者 60 条真实台词里 26 条判 X/Y，
+                           # 本表当时一条都拦不住；取证 out/q12_p0c_s6_replay.json 的
+                           # violate_members）。PM 明确「不许改判定脚本的口径来达标」，
+                           # 所以把 X/Y/Z 的字面特征搬进本表，而不是去动评审脚本。
+                           # 两处刻意收窄，都是为了避免重演 P0-B 的否定式过触发：
+                           #   · 「好笑」不收，只收「有点好笑」——池里「我可不觉得好笑」
+                           #     是**拒绝跟着嘲笑**，属于 resist_follow 的正确行为；
+                           #   · 「听见了 / 都听见了」都不收（宽口径 R61/#62 收的是裸
+                           #     「听见了」）：池里带这三个字的句子有一半是**被压的人在说话**
+                           #     （`{reply}我一字一句都听见了，只是不照着你们的调子答`、
+                           #     `这事我当面说一句：他刚才讲的不是假话，你们也都听见了`、
+                           #     `你们这动静我听见了`），收裸词等于把硬气受害者与打圆场
+                           #     的句子判成施害者台词。借人数压人那一类由「大家伙儿都」
+                           #     承接（实测唯一实例：provoke 收尾「大家伙儿都听见了」）。
+                           "寒酸", "装什么", "现眼", "土包子", "穷酸", "自知之明",
+                           "什么档次", "长这样", "精神多了", "有点好笑", "生气的样子",
+                           "生气样子", "逗逗你", "开玩笑呢", "不给面子", "至于吗",
+                           "真有毅力", "没什么用", "急什么", "恼羞成怒",
+                           "大家伙儿都", "不服也白搭", "你别不服", "心里清楚",
+                           "我跟你说清楚", "掂量掂量")
+
+
+def _has_scene_anchor(text: str) -> bool:
+    """这句是否带「换了情景就会变样」的锚点：`{obj}` 按当前情景取物，
+    情景限定词由 `_scene_foreign` 门禁削减。两者都没有的句子在 8 个情景下
+    逐字相同（Major-4 就是被这类句子抹平的）。"""
+    t = text or ""
+    if "{obj}" in t:
+        return True
+    return any(w in t for w in _SCENE_PROP_WORDS) or any(
+        m in t for m in _ACTIVITY_MARKERS)
+
+
+def _stance_lib(stance: str, bucket: str, agent_id: str = ""):
+    """按立场取（台词库, 收尾库, 动作库）。
+
+    任务#60-2：`stance == "indirect"` 时再按角色分族（正义旁观者=打圆场族，
+    霸凌者/从众旁观者=借手递话族）。
+    任务#60-3：受害者也门控，族名 `"firm"` = 直接复用现有 firm 库（不新建第四库），
+    代价与理由见 `_INDIRECT_FAMILY_BY_ROLE` 上方注释。
+    firm/soft 不依赖 agent_id，库内容与顺序仍只由 (倾向,档,角色,情景,立场) 决定。
+    """
+    if stance == "indirect":
+        return _indirect_lib(bucket, agent_id)
+    return _PERSONA_FIRM_LINES[bucket], _PERSONA_FIRM_TAILS[bucket], _PERSONA_FIRM_OPENERS
+
+
+def _rotate(seq: list, seed: str) -> list:
+    """按 (倾向, 角色) 稳定地转一个起点，让不同倾向/角色的池头不落在同一句库句上。
+    只依赖文案本身，不碰运行时槽位 ⇒ 池成员与顺序仍只由 (倾向,档,角色,情景,立场) 决定。"""
+    if not seq or len(seq) < 2:
+        return list(seq)
+    off = sum(ord(c) for c in (seed or "")) % len(seq)
+    return list(seq[off:]) + list(seq[:off])
+
 
 _PUNCT_SPLIT = re.compile(r"[。！？!?；;，,、….…\s\"'“”‘’（）()【】\[\]:：]+")
 _SANITIZE = re.compile(r"[{}\r\n\t\u0000-\u001f`*#|<>]+")
+# 舞台提示括注（`（嬉皮笑脸地晃过来）龙飞，你今天别想走。`）。任务#64 P1-D：
+# `_keyword_from` 取「上一条发言的具体抓手」时必须**先整块剥掉**它，理由见那里。
+_ACTION_PAREN = re.compile(r"[（(][^（）()]*[）)]")
 
 
 def _sanitize_slot(value, limit: int = 16) -> str:
@@ -1282,10 +1940,20 @@ def _sanitize_slot(value, limit: int = 16) -> str:
 
 
 def _keyword_from(text: str) -> str:
-    """从上一条发言里取一个语义片段作为「具体回应」的抓手。"""
+    """从上一条发言里取一个语义片段作为「具体回应」的抓手。
+
+    任务#64 P1-D：**先整块剥掉舞台提示括注**，再按标点切段取最长。
+    旧写法把 `（）` 也当分隔符，于是括注里的动作描写（「嬉皮笑脸地晃过来」9 字）
+    和被它切断的台词小句（「你今天别想走」6 字）一起进候选，而排序键只有 `len`
+    ⇒ 实测「带括注的消息里最长括注 > 最长台词小句」占 3,913/4,858 = 80.6%，
+    `{reply}` 于是经常引用舞台提示而不是原话（969 会话/10,614 条消息回放 17.44%）。
+    只改**运行时槽位取值**，不碰池成员与顺序（#54-7 不变量）：本函数唯一的下游是
+    `build_preset_context` 里的 `ctx["reply"]`，`_segments`/`_combo_list` 都不读它。
+    """
     if not isinstance(text, str) or not text.strip():
         return ""
-    parts = [p for p in _PUNCT_SPLIT.split(_SANITIZE.sub(" ", text)) if p and len(p.strip()) >= 2]
+    body = _ACTION_PAREN.sub(" ", _SANITIZE.sub(" ", text))
+    parts = [p for p in _PUNCT_SPLIT.split(body) if p and len(p.strip()) >= 2]
     if not parts:
         return ""
     parts.sort(key=len, reverse=True)
@@ -1293,17 +1961,89 @@ def _keyword_from(text: str) -> str:
     return _sanitize_slot(best, 14)
 
 
+def _scene_activity_foreign(text: str, scene_text: str) -> bool:
+    """活动断言判定：这句话等于宣称「此刻正在做某事」，而情景文本没给出这项活动。"""
+    if not scene_text or not text:
+        return False
+    return any(marker in text and not any(ev in scene_text for ev in evidence)
+               for marker, evidence in _SCENE_ACTIVITY_GATE)
+
+
 def _scene_object(scenario_text: str) -> str:
+    """按关键词在当前情景里认物件；认到但只是把该物件**当活动**（情景里没人在写
+    作业）时跳到下一个关键词，而不是把「那本作业」塞进 {obj}——槽位是在渲染之后
+    填的，`_scene_foreign` 只看模板，挡不住这一层。全部认不出就返回空串走通用兜底。"""
+    text = scenario_text or ""
     for key, label in SCENE_OBJECT_KEYWORDS:
-        if key in (scenario_text or ""):
+        if key in text and not _scene_activity_foreign(label, text):
             return label
     return ""
 
 
+def _split_persona_words(value) -> list:
+    """cast 里 traits/speakingStyle 既可能是 list，也可能是前端来的逗号串。"""
+    if isinstance(value, str):
+        parts = re.split(r"[、,，;；/|]+", value)
+    elif isinstance(value, (list, tuple, set)):
+        parts = [str(x) for x in value]
+    else:
+        parts = []
+    out = []
+    for p in parts:
+        p = _sanitize_slot(p, 8).strip()
+        if not _MANNER_CANDIDATE.match(p):
+            continue
+        if any(b in p for b in _MANNER_SKIP):
+            continue
+        out.append(p)
+    return out
+
+
+def classify_persona(persona) -> tuple:
+    """从情景人设里取「语气词 + 立场」，返回 (sw, stance)。
+    stance ∈ firm / soft / indirect / neutral（任务#60 新增 indirect=「当面软、背后硬」）。
+
+    聚合口径（任务#64 P0-B 收紧）：**硬/软先比多数**；indirect 只有在
+    「通篇除了幕后证据没有别的 firm/soft 证据」时才成立（`firm==0 且 soft==0`）；
+    firm/soft 打平时按词序取第一个 firm/soft 词，**indirect 不参与打平上位**
+    （旧口径「打平即 indirect」会把「附和 + 嗓门大」这类复合人设整体劫持成幕后型——
+    审查#61 F3 实测 s2 马超 8 个可达倾向首句全改写，且删掉「附和」一词就翻成 firm，
+    结论对单个词高度敏感）。全判不出来才是 neutral。"""
+    if not isinstance(persona, dict):
+        return "", "neutral"
+    words = []
+    for key in ("speakingStyle", "speaking_style", "traits"):
+        for w in _split_persona_words(persona.get(key)):
+            if w not in words:
+                words.append(w)
+    if not words:
+        return "", "neutral"
+    classes = [_word_stance(w) for w in words]
+    firm, soft, indirect = (classes.count("firm"), classes.count("soft"),
+                            classes.count("indirect"))
+    if firm > soft:
+        stance = "firm"
+    elif soft > firm:
+        stance = "soft"
+    elif indirect and not firm and not soft:
+        stance = "indirect"
+    else:
+        stance = next((c for c in classes if c in ("firm", "soft")), "neutral")
+    # 语气词取人设的**首要**说话风格（speakingStyle[0]）；立场只负责筛选句子。
+    # 反过来「先挑立场相符的词」会把「轻声」的班长演成「讲道理」的腔，丢原有个性。
+    return words[0], stance
+
+
 def build_preset_context(agent_id: str = "", level: int = 2, agent_name: str = "",
                          other_name: str = "", other_content: str = "",
-                         scenario_text: str = "") -> Dict[str, str]:
-    """构造离线模板槽位上下文（角色名 / 对方名 / 上一条发言关键词 / 场景物件 / 强度词）。"""
+                         scenario_text: str = "", persona=None) -> Dict[str, str]:
+    """构造离线模板槽位上下文。
+
+    角色名 / 对方名 / 上一条发言关键词 / 场景物件 / 强度词 +（任务#50 新增）
+    当前情景人设的语气词与立场、以及用于跨情景物件词过滤的当前情景原文。
+    `_stance` / `_scene` 会随 decision_log.slot_context 落盘，离线复现时
+    渲染口径与生成时完全一致（不额外读全局状态）。
+    """
     ctx: Dict[str, str] = {}
     me = _sanitize_slot(agent_name, 12)
     if me:
@@ -1327,7 +2067,276 @@ def build_preset_context(agent_id: str = "", level: int = 2, agent_name: str = "
         tone = None
     if tone:
         ctx["lv"] = tone
+    # 人设槽位：cast 拿不到时退到「按角色默认语气」，立场仍为 neutral（不改可选集合）
+    sw, stance = classify_persona(persona)
+    if not sw:
+        sw = DEFAULT_STYLE_BY_ROLE.get(agent_id, "")
+        stance = "neutral"
+    if sw:
+        ctx["sw"] = sw
+    ctx["_stance"] = stance
+    ctx["_scene"] = _SANITIZE.sub(" ", scenario_text or "").strip()[:1200]
     return ctx
+
+
+def _ctx_get(context, key: str) -> str:
+    if not isinstance(context, dict):
+        return ""
+    val = context.get(key)
+    return val.strip() if isinstance(val, str) else ""
+
+
+def _opener_stance(text: str) -> str:
+    if any(m in text for m in _SOFT_ACTION_MARKS):
+        return "soft"
+    if any(m in text for m in _FIRM_ACTION_MARKS):
+        return "firm"
+    return "neutral"
+
+
+def _is_soft_speech(text: str) -> bool:
+    return any(m in text for m in _SOFT_SPEECH_MARKS)
+
+
+def _is_direct_confront_action(text: str) -> bool:
+    """当面威逼的动作括注（indirect 立场不选它）。"""
+    t = text or ""
+    return any(m in t for m in _DIRECT_CONFRONT_ACTIONS)
+
+
+def _is_direct_confront_speech(text: str) -> bool:
+    """当面开口的威逼/逐客令台词（indirect 立场不选它，用户要的是「借别人的手」）。"""
+    t = text or ""
+    return any(m in t for m in _DIRECT_CONFRONT_SPEECH)
+
+
+def _scene_foreign(text: str, scene_text: str) -> bool:
+    """串味判定：道具/地点/时段按「字面出现在当前情景文本里」放行；
+    「正在做某事」的活动断言（作业/在写/画家/画画…）额外要活动证据。"""
+    if not scene_text:
+        return False
+    if _scene_activity_foreign(text, scene_text):
+        return True
+    return any(word in text and word not in scene_text for word in _SCENE_PROP_WORDS)
+
+
+def _keep(seq: list, predicate) -> list:
+    """筛选后为空则整档回退原列表：保证任何倾向×任何角色都有可选变体。"""
+    try:
+        out = [x for x in seq if predicate(x)]
+    except Exception:
+        return seq
+    return out if out else seq
+
+
+_HANZI_RUN = re.compile(r"[㐀-䶿一-鿿]+")
+_SLOT_TOKEN = re.compile(r"\{[^}]*\}")
+# 同一条台词内部「自己重一遍」的判定，分两级：
+#   硬过滤（直接不进池）：整条小句重复、跨小句共享 ≥6 个连续汉字、共用同一个会填出
+#     相同内容的动态槽位。用户样本「今天比昨天还早」是 7 个汉字的小句重复，两级都盖住。
+#   软过滤（进池但排到尾部）：3–5 个汉字的半句复用（「我不喜欢」「先看看」这类）。
+#     任务#54 第一轮把软档也当硬档删，结果 s4 受害者 withdraw@high 池被压到 8 条、
+#     25 轮会话里第 15 次取号发生逐字复读（轮转序号用尽后回绕）。软档留在池尾既保住
+#     「同一条台词不重」，也保住池深度不被掏空——整段逐字复读比半句复用响得多。
+_ECHO_MIN_RUN = 6       # 硬过滤：跨小句连续公共汉字串门槛
+_ECHO_SOFT_RUN = 3      # 软过滤：3 字以上半句复用只排序到池尾，不删除
+# 为什么软档门槛是 3 而不是 4：用户点名的第二种缺陷形如「先看看再说」在一句里出现
+# 两遍，前半句复用只有 3 个字（`先看看`），4 字门槛挡不住它。实测把软档降到 3 字
+# **不牺牲池深度**（8 情景 × 4 角色 × 26 键 × 3 档穷举：最小清洁池头仍是 20 条、
+# 最小池仍是 30 条），因为软档本来就只排序不删除，删的是「常规会话轮转能摸到的位置」。
+_ECHO_MIN_CLAUSE = 4    # 硬过滤：整条小句重复（「差不多得了」这种短句重复）门槛
+_ECHO_SHARED_SLOTS = ("{reply}", "{obj}", "{me}", "{other}", "{lv}")
+_ECHO_FATAL = 100       # 同一条会填出逐字相同内容的槽位，重复度按满分算
+# 为什么「填槽后必然照抄」要在**模板层**用槽位 token 判定，而不是真去填每轮的槽位：
+# 组合池的成员和顺序必须只由 (倾向, 档, 角色, 情景, 立场) 决定——supervisor 的轮转
+# 记账 `pool_key` 就是这个粒度，一旦池随 `{reply}`/`{lv}` 漂移，同一个序号在两轮换
+# 成了不同的句子，"已用序号"就失效，实测 438 条台词里冒出 2 条跨轮逐字复读。
+_MIN_COMBOS = 6         # 契约：每个「倾向×档×角色」池至少 6 条可选变体
+_MIN_FIRM_SEGMENTS = 3  # 立场筛选后每段至少留几条台词/收尾（不够就按原序回补，防逐字复读）
+
+
+def _hanzi_only(text: str) -> str:
+    """只留汉字串（去掉标点/空白/槽位），用于找公共连续片段。"""
+    return "".join(_HANZI_RUN.findall(_SLOT_TOKEN.sub(" ", text or "")))
+
+
+def _shared_run(a: str, b: str) -> int:
+    """两段汉字串的最长公共连续片段长度（滚动 DP，串长都在几十以内）。"""
+    if not a or not b:
+        return 0
+    prev = [0] * len(b)
+    best = 0
+    for i in range(len(a)):
+        cur = [0] * len(b)
+        ai = a[i]
+        for j in range(len(b)):
+            if ai == b[j]:
+                cur[j] = (prev[j - 1] if j else 0) + 1
+                if cur[j] > best:
+                    best = cur[j]
+        prev = cur
+    return best
+
+
+def _clauses(text: str) -> list:
+    """切小句（只留汉字串），丢掉 4 字以下的短语气词，避免「我不/你不」这类误判。"""
+    out = []
+    for part in _PUNCT_SPLIT.split(_SLOT_TOKEN.sub(" ", text or "")):
+        run = "".join(_HANZI_RUN.findall(part or ""))
+        if len(run) >= _ECHO_MIN_CLAUSE:
+            out.append(run)
+    return out
+
+
+def _echo_grade(first: str, second: str):
+    """两段文本的重复等级 → (grade, severity)。
+
+    grade 0 = 干净；1 = 软（3–5 字半句复用）；2 = 硬（整条小句重复、跨小句共享 ≥6 个
+    连续汉字、**两段共用同一个动态槽位**），不进池。
+
+    第三条是任务#54 的关键：`{reply}` 会填成一整句引语（「对方刚才那句“你走开”」），
+    模板层面看着不重、填槽后就是照抄，实测 8 情景穷举有 6,663 条这种 ≥8 字自重叠，
+    正是用户点名的第二种缺陷。判重必须**看得见填槽后的样子**，但又**不能真的拿运行时
+    槽位去判**（见 `_combos` 的说明），所以这里按「槽位 token 相同 = 填出来必然相同」
+    处理——`{obj}` 配 4 字模板复用能凑到 7 字，也是这条规则顺手一起挡掉的。
+    """
+    slots = {s for s in _SLOT_TOKEN.findall(first) if s in _ECHO_SHARED_SLOTS}
+    if slots & {s for s in _SLOT_TOKEN.findall(second) if s in _ECHO_SHARED_SLOTS}:
+        return 2, _ECHO_FATAL
+    run = _shared_run(_hanzi_only(first), _hanzi_only(second))
+    clause = max((len(c) for c in set(_clauses(first)) & set(_clauses(second))), default=0)
+    severity = max(run, clause)
+    grade = 2 if (clause >= _ECHO_MIN_CLAUSE or run >= _ECHO_MIN_RUN) else (
+        1 if run >= _ECHO_SOFT_RUN else 0)
+    return grade, severity
+
+
+def _echo_pair(first: str, second: str):
+    """（是否硬重复, 重复度）——保留旧接口给外部一次性判断用。"""
+    grade, severity = _echo_grade(first, second)
+    return grade >= 2, severity
+
+
+def _is_echo(first: str, second: str) -> bool:
+    return _echo_pair(first, second)[0]
+
+
+def _slot_values(context=None, agent_id: str = "") -> Dict[str, str]:
+    """填槽取值的唯一入口（`render_tendency_variant` 用），口径与 `_fill_slots` 一致：
+    `_SLOT_FALLBACK` 打底，context 里的非空字符串覆盖；`_scene`/`_stance` 这类内部键
+    不参与填槽。
+
+    任务#54 第 2 轮把 `_combos` 的判重从这条取值上**摘掉**了：判重一旦看得见运行时
+    槽位文本，池成员就会随 `{reply}`/`{lv}` 逐轮漂移，而 supervisor 的轮转记账
+    (`pool_key = 倾向|角色|档`) 看不见这种漂移，index↔句子 换轮就重新排列，长会话
+    实测反而冒出 2 条跨轮逐字复读（selfcheck §5）。组合池必须**上下文无关**，
+    「填槽后必然照抄」这一类改用「两段共用同一个动态槽位」在模板层判掉
+    （见 `_echo_grade`）。
+    """
+    values = {k: v for k, v in _SLOT_FALLBACK.items() if isinstance(v, str)}
+    if isinstance(context, dict):
+        values.update({k: v.strip() for k, v in context.items()
+                       if isinstance(v, str) and v.strip() and not k.startswith("_")})
+    sw = _ctx_get(context, "sw") or DEFAULT_STYLE_BY_ROLE.get(agent_id, "")
+    if sw:
+        values["sw"] = sw
+    return values
+
+
+def _self_repeat_grade(hanzi: str):
+    """整条台词**自己重一遍**的等级 → (grade, 重复串长度)。
+
+    ≥6 个连续汉字出现两次（两处不重叠）= 硬，≥3 字 = 软，其余 (0, 0)。
+
+    为什么不能只看「两段两两之间」：上一段的末字会和下一段的首字连成一串，
+    实测形态是 `（…两手在身侧攥着）` + `…的事到此为止…` + `…的事我陪你…`——
+    两两相比最长公共串只有 4 字，拼起来因为跨边界黏连能到 7 字。用户看到的是整句，
+    所以判重也得按整句判。传进来的是 `_hanzi_only(模板拼接串)`，
+    不含任何运行时槽位文本（原因见 `_slot_values` 的说明）。
+    """
+    if not hanzi:
+        return 0, 0
+    for k, grade in ((_ECHO_MIN_RUN, 2), (_ECHO_SOFT_RUN, 1)):
+        first = {}
+        for i in range(len(hanzi) - k + 1):
+            gram = hanzi[i:i + k]
+            prev = first.get(gram)
+            if prev is not None:
+                if i - prev >= k:
+                    return grade, k
+            else:
+                first[gram] = i
+    return 0, 0
+
+
+def _scored_combos(openers: list, lines: list, tails: list) -> list:
+    """枚举「动作×台词×收尾」并逐条打分 → `[(grade, severity, 枚举序, (oi, li, ti)), ...]`。
+
+    grade：0 干净 / 1 软（3–5 字半句复用）/ 2 硬（整条小句重复、≥6 字连续公共串、
+    两段共用同一个会填出相同内容的动态槽位）。硬的不进池，软的排到池尾。
+    打分只看**模板文本**、不看运行时填槽结果，所以同一份池文案在任何轮次下得到完全
+    相同的组合表和顺序（为什么这点是硬要求，见 `_slot_values` 与 `_combos` 的说明）。
+    `_combos` 与离线自测**共用**本函数，避免「自测口径和生产口径不一致」这种最难查的偏差。
+    """
+    seen_triples = set()
+    seen_texts = set()
+    scored = []
+    for oi, o in enumerate(openers):
+        for li, l in enumerate(lines):
+            for ti, t in enumerate(tails):
+                if (o, l, t) in seen_triples:
+                    continue          # 三段一模一样的组合只会产出同一句话
+                seen_triples.add((o, l, t))
+                text = (o or "") + (l or "") + (t or "")
+                if text in seen_texts:
+                    continue          # 换个三段切法拼出逐字相同的一句：占号不占信息
+                seen_texts.add(text)
+                body_hz = _hanzi_only(text)
+                flags = [_echo_grade(o, l), _echo_grade(o, t), _echo_grade(l, t)]
+                sg, sr = _self_repeat_grade(body_hz)
+                grade = max([f[0] for f in flags] + [sg])
+                severity = max([f[1] for f in flags] + [sr])
+                scored.append((grade, severity, len(scored), (oi, li, ti)))
+    return scored
+
+
+def _combos(openers: list, lines: list, tails: list) -> tuple:
+    """把「动作×台词×收尾」的笛卡尔积按句内重复度排序：硬重复剔除，软重复排到池尾。
+
+    池文案一字未动：句内重复是**组合方式**造成的（head 与 tail 各带同一句「今天比
+    昨天还早」），所以剔组合比改文案更准。取号是从池头往后轮转的（`pick_variant_index`），
+    所以「排序」等价于「常规会话里根本轮不到脏组合」：
+      · 剔掉硬重复保证任何一条都不会出现整句自重复；
+      · 软重复（3–5 字半句复用）只降序，不删除——删干净会把池压到 30 条以下，
+        长会话取号用尽后回绕，表现为**整段台词逐字复读**，比留一条 4 字半句更糟；
+      · 清洗后仍不足 `_MIN_COMBOS` 时，按重复度最轻的硬重复补齐（契约：每池 ≥6 条
+        且序号→文本一一对应）。
+
+    「填槽后照抄同一句引语」这一类（`{reply}` 会填成一整句引语，两段都用它就必然照抄，
+    实测占 8 情景穷举 6,663 条 ≥8 字自重叠的绝大多数）由 `_echo_grade` 的**共用动态
+    槽位**规则在模板层挡掉，而不是真的把每轮槽位填进去判。原因：判重一旦看得见运行时
+    槽位文本，池成员就随 `{reply}`/`{lv}` 逐轮漂移，而 supervisor 的轮转记账只到
+    「倾向×角色×档」，序号↔句子的映射换轮重排，selfcheck §5 实测冒出 2 条跨轮逐字复读
+    （438 条台词）——脏组合必须**永远**排在池尾，不能这轮在尾、下轮冒到头上来。
+    """
+    scored = _scored_combos(openers, lines, tails)
+    clean = [item for item in scored if item[0] == 0]          # 已按枚举顺序排列
+    soft = sorted((item for item in scored if item[0] == 1), key=lambda x: (x[1], x[2]))
+    hard = sorted((item for item in scored if item[0] == 2), key=lambda x: (x[1], x[2]))
+    keep = clean + soft
+    if len(keep) < _MIN_COMBOS:
+        keep = keep + hard[:_MIN_COMBOS - len(keep)]
+    return tuple(item[3] for item in keep)
+
+
+def combo_head_depth(openers: list, lines: list, tails: list) -> int:
+    """池头深度 = 排序后开头连续「零重复」的组合条数（自测/端到端复核用）。
+
+    `_combos` 的输出是 `clean + soft (+ 补齐的 hard)`，clean 保持枚举序，所以
+    「池头条数」就是 grade==0 的条数；取号轮转用不到这么深，脏组合就永远不可达。
+    """
+    scored = _scored_combos(openers, lines, tails)
+    return sum(1 for item in scored if item[0] == 0)
 
 
 def _fill_slots(text: str, context: Dict[str, str] = None) -> str:
@@ -1369,44 +2378,274 @@ def _pool_and_bucket(tendency: str, level, agent_id: str = ""):
 
 
 def tendency_pool_key(tendency: str, level, agent_id: str = "") -> str:
-    """同会话去重的分池键：倾向×档（hesitate 再加角色）。"""
+    """同会话去重的分池键：倾向×档×**角色**（任务#50 方案 D）。
+
+    旧口径对非 hesitate 硬写 who="-"，四个角色共用一个序号池，表现为
+    「上一句刚才是受害者说的，这一句霸凌者又原样说一遍」（换人复读）。
+    """
     _, bucket = _pool_and_bucket(tendency, level, agent_id)
     if bucket is None:
         return ""
-    who = agent_id if tendency == "hesitate" else "-"
-    return f"{tendency}|{who}|{bucket}"
+    return f"{tendency}|{agent_id or '-'}|{bucket}"
 
 
-def tendency_pool_size(tendency: str, level, agent_id: str = "") -> int:
+def tendency_pool_size(tendency: str, level, agent_id: str = "", context=None) -> int:
     entry, bucket = _pool_and_bucket(tendency, level, agent_id)
     if not entry or bucket is None:
         return 0
-    return max(1, len(entry.get("openers") or [""])) * max(1, len(entry.get(bucket) or [""])) * \
-        max(1, len(entry.get("tails") or [""]))
+    openers, lines, tails = _segments(entry, bucket, context, agent_id, tendency)
+    return max(1, len(_combo_list(tuple(openers), tuple(lines), tuple(tails))))
+
+
+@lru_cache(maxsize=8192)
+def _combo_list(openers: tuple, lines: tuple, tails: tuple) -> tuple:
+    """`_combos` 的缓存壳：同一组「动作/台词/收尾」文案只算一次组合表。
+
+    键里没有运行时槽位文本——池成员与顺序必须上下文无关，否则同一 `pool_key`
+    在不同轮次下会得到不同的「序号→句子」表，去重记账就失效（`_combos` 有实测数字）。
+    """
+    return _combos(list(openers), list(lines), list(tails))
+
+
+def _manner_compatible(sw: str, opener_text: str) -> bool:
+    """语气词与动作括注的立场是否相容（任务#60 Blocker-1 根因 A 的第 2 步）。
+
+    立场判不出（neutral）时**放行**，保持既有「换腔」行为；判得出且分属软/硬两边时
+    拒绝前置——「当面客气」不许贴在「把椅子往后一蹭，斜着眼看过来」这种当面挑衅的
+    动作前面，「语气发冲」不许贴在低头缩肩的动作前面。
+    第二条轴（同一处缺陷的另一半）：`indirect` 人设（表面礼貌/背后操控）不许贴在
+    「当面威逼」的动作上——它与 firm 一样「不示弱」，所以软/硬轴分不出这对矛盾，
+    必须单独按 `_is_direct_confront_action` 判。"""
+    a = _word_stance(sw)
+    b = _opener_stance(opener_text)
+    if a == "neutral" or b == "neutral":
+        return True
+    if a == "indirect" and _is_direct_confront_action(opener_text):
+        return False
+    softish_a = a == "soft"
+    softish_b = b == "soft"
+    return softish_a == softish_b
+
+
+def _merge_manner(opener: str, sw: str) -> str:
+    """把语气词并进动作括注的开头；已含该词（或已是人设模板）则不重复。
+    任务#60：立场不相容时不贴——只贴语气词等于用格式掩盖「筛选没生效」，
+    产出自相矛盾句（「当面客气」+ 当面挑衅台词）。"""
+    text = (opener or "").strip()
+    if not text.startswith("（") or not text.endswith("）") or len(text) <= 2:
+        return text
+    inner = text[1:-1]
+    if not sw or "{sw}" in inner or sw in inner:
+        return text
+    if not _manner_compatible(sw, inner):
+        return text
+    return f"（{sw}，{inner}）"
+
+
+def _top_up(kept: list, filler: list, floor: int) -> list:
+    """立场筛选后太薄时补底：先把筛选留下的句子放前面，再按 `filler` 顺序补到
+    `floor` 条为止。
+
+    任务#60（Blocker-1 根因 B）改口径：`filler` **必须由调用方给成「立场相容」的句子**
+    （`_segments` 里传的是带 `{obj}` 锚点的人设句库，不再是未筛选的原池）。
+    原池补底的问题不是写错，而是两个正确目标冲突：#54 当年为了消除「整档被筛空 →
+    池太薄 → 逐字复读」，故意把被筛掉的句子回填；结果 s8 硬气受害者前 12 条 12/12
+    含示弱句（`_combos` 里 `ti` 变化最快，回填句恰好落在最常取到的序号上）。
+    现在两件事一起满足：
+      · 示弱句**永不**回填（立场一致性）；
+      · 池深度由锚点句库供给，库句也不足时**下调该档下限**（`floor` 取实际可选条数），
+        而不是回退成矛盾句；`_MIN_COMBOS` 的契约由 openers×lines×tails 的乘积守住。
+
+    2026-11-15 PM 裁定（任务#60 收尾，别再翻案）：这两个目标冲突时产品口径定为
+    **「一次会话内不出现逐字复读」优先**。落地点两处——B 项用乘积把最小池守到 48
+    （> 会话跨度 40，`SharedState.max_rounds`），C 项把情景锚点只放在**收尾**（tails）
+    而不强求台词段逐条带锚点：台词段也逐字带锚点的话组合池会从 48 掉到 6 以下，
+    长会话必然回绕复读。实测口径见 test_evidence/integration_check_20261115/rework_60/
+    README.md 的 B/C 两节。
+    """
+    out = list(kept)
+    if len(out) >= floor:
+        return out
+    for x in filler:
+        if len(out) >= floor:
+            break
+        if x not in out:
+            out.append(x)
+    return out
+
+
+def _tendency_index(tendency: str) -> int:
+    """26 键**排序后**的稳定序号，只用来当库窗口的组号。
+
+    为什么不用 `TENDENCY_RESPONSES` 的插入序：dict 插入序会随文案增删而漂移，
+    组号跟着漂 ⇒ 同一格同一倾向的池成员在两次改动之间悄悄换了内容，
+    而键名没变（#54-7 要守的正是「成员/顺序只由 (倾向,档,角色,情景,立场) 决定」，
+    词典书写顺序不属于这五个维度）。排序序只依赖键名本身。
+    """
+    order = getattr(_tendency_index, "_order", None)
+    if order is None:
+        order = tuple(sorted(TENDENCY_RESPONSES))
+        _tendency_index._order = order
+    try:
+        return order.index(tendency)
+    except ValueError:
+        return 0
+
+
+def _tendency_window(seq, tendency: str, window=None) -> list:
+    """任务#64 P0-A②：把立场库按**倾向**切成互不相交的窗口，取当前倾向那一窗。
+
+    根因：`_rotate` 只换起点不换成员，5 元库在任何起点下两两相交 ⇒ 只要两个倾向
+    在同一格里都被立场筛空（`keep_lines == []`），它们的台词段成员集合就完全相同，
+    「同格跨倾向逐字同句」由此而来（#62 实测 s8 受害者 `endure_quietly|withdraw`
+    4,060 对里 12/12 逐字相同）。PM 的口径是「整档替换必须按倾向做**成员级**差异化」，
+    所以这里切的是成员而不是起点。
+
+    互斥条件：`组数 = len(库) // 窗口`，`组号 = 倾向序号 % 组数`，窗口 = 从
+    `组号 × 窗口` 起的连续 `窗口` 条 ⇒ 各窗恰好落在 `[0, 组数×窗口)` 的不重叠区间里
+    （库长不是窗口整数倍时，余下的句子不被任何窗口取用，也不破坏互斥）。
+    库长 < 2×窗口 时切不出两组，退化成整库（此时只能靠兄弟档补底差异化）。
+
+    池成员仍只由 (倾向,档,角色,情景,立场) 决定：组号来自倾向名，窗口来自库长，
+    两者都不是运行时槽位 ⇒ 不违反 #54-7。
+    """
+    win = int(window or _MIN_FIRM_SEGMENTS)
+    seq = list(seq or [])
+    n = len(seq)
+    if n == 0:
+        return []
+    groups = max(1, n // win)
+    if groups <= 1:
+        return seq
+    off = (_tendency_index(tendency) % groups) * win
+    return seq[off:off + win]
+
+
+def _segments(entry: dict, bucket, context=None, agent_id: str = "",
+              tendency: str = ""):
+    """返回立场/情景相容的 (openers, lines, tails)；pick 与 render 必须共用本函数。
+
+    任务#64 P0-A 重写了 firm/indirect 分支的三段供给口径，三条改动各自的落点：
+      ② **成员级差异化**：台词/动作段拿的是 `_tendency_window` 切出的**本倾向窗口**，
+         不再整库粘贴；补底顺序 原池保留句 → **本倾向兄弟档** → 本倾向库窗口，
+         并且**不再回落到整库**（`no_leak`；旧实现 `_top_up(..., gated_lines)` 在
+         补不满 3 条时会把整库倒进来，把成员级差异化抵消掉——评测 W1 的 35 格）。
+      ③ **锚点收尾参与轮转**：原池里带 `{obj}`/情景词的收尾与库收尾 `dict.fromkeys`
+         合并后**整体** `_rotate`，不再被库句无条件顶到前面（旧实现库尾永远占据
+         池头，`ti` 变化最快 ⇒ 一次会话里可见收尾只剩库的那几条）。
+      兄弟档补底（`sib_add`）是②的一部分，但它的收益是**实测**的而不是结构性的：
+         同一倾向的另一档句子天然属于本倾向，跨倾向零共享；去掉它之后
+         `escalate_severe|silence_fear` 在 4 个 indirect 格里重新出 132 对
+         （评测 N4），所以这条由常驻断言 `test_a3_*` 守着，不许当免费午餐删掉。
+    """
+    openers = list(entry.get("openers") or [""])
+    lines = list(entry.get(bucket) or [""])
+    tails = list(entry.get("tails") or [""])
+
+    scene = _ctx_get(context, "_scene")
+    if scene:
+        openers = _keep(openers, lambda t: not _scene_foreign(t, scene))
+        lines = _keep(lines, lambda t: not _scene_foreign(t, scene))
+        tails = _keep(tails, lambda t: not _scene_foreign(t, scene))
+
+    stance = _ctx_get(context, "_stance") or "neutral"
+    seed = f"{tendency}|{agent_id}"
+    if stance in ("firm", "indirect"):
+        indirect = stance == "indirect"
+        lib_lines, lib_tails, lib_openers = _stance_lib(
+            stance, "high" if bucket == "high" else "low", agent_id)
+
+        def _ok(t):
+            if _is_soft_speech(t):
+                return False
+            if indirect and _is_direct_confront_speech(t):
+                return False
+            return True
+
+        def _gated(window):
+            """库窗口再过一道情景门禁（自建情景里的道具词安全）。筛空时**保留窗口**
+            而不是回落整库——回落就等于把成员级差异化吐回去。"""
+            if not scene or not window:
+                return list(window)
+            keep = [t for t in window if not _scene_foreign(t, scene)]
+            return keep or list(window)
+
+        # 动作：筛掉示弱动作；indirect 再筛掉「当面逼」那类动作
+        hard = [t for t in openers if _opener_stance(t) != "soft"]
+        if indirect:
+            hard = _keep(hard, lambda t: not _is_direct_confront_action(t))
+        opener_win = _gated(_tendency_window(lib_openers, tendency))
+        openers = hard + [t for t in opener_win if t not in hard]
+        if not openers:
+            openers = list(opener_win)
+
+        keep_lines = [t for t in lines if _ok(t)]
+        line_win = _gated(_tendency_window(lib_lines, tendency))
+        # 兄弟档 = 同一倾向的另一档。它属于本倾向，跨倾向零共享，是②里最强的一档
+        sib_key = "high" if bucket == "low" else "low"
+        sibling = entry.get(sib_key)
+        sib_add = ([t for t in sibling if _ok(t) and not (scene and _scene_foreign(t, scene))]
+                   if isinstance(sibling, list) else [])
+        floor = _MIN_FIRM_SEGMENTS
+        if not keep_lines:
+            # ② 整档被立场筛空：先本倾向兄弟档，再补本倾向的库窗口，取满 floor 条
+            lines = list(dict.fromkeys(sib_add + line_win))[:floor]
+        elif len(keep_lines) < floor:
+            lines = _top_up(keep_lines, sib_add + line_win, floor)
+        else:
+            lines = keep_lines
+        if not lines:
+            lines = list(line_win or lib_lines)
+
+        # ③（Major-4 的收尾锚点断言不变）：本立场下参与组合的**收尾**必须全部带
+        #     情景锚点——原池的非锚点收尾仍被剔掉，锚点收尾与库收尾合并后整体轮转。
+        #     （「锚点只放 tails」是 PM 2026-11-15 的定案，取舍理由见 `_top_up` docstring。）
+        keep_tails = [t for t in tails if _ok(t)]
+        anchored = [t for t in keep_tails if _has_scene_anchor(t)]
+        tails = _rotate(list(dict.fromkeys(anchored + _rotate(lib_tails, tendency))), seed)
+    elif stance == "soft":
+        soft_openers = [t for t in openers if _opener_stance(t) != "firm"]
+        openers = soft_openers + [t for t in _PERSONA_SOFT_OPENERS if t not in soft_openers]
+        # 任务#64：收尾与 firm/indirect 同一口径——原池里带锚点的收尾在前，库收尾
+        # 整体轮转在后（只换起点不换成员，成员恒定 ⇒ 不违反 #54-7）。原池收尾
+        # 一条锚点都没有时，全部由库供给，这样同一格在 8 个情景下不再逐字相同。
+        anchored = [t for t in tails if _has_scene_anchor(t)]
+        tails = _rotate(list(dict.fromkeys(anchored + _rotate(_PERSONA_SOFT_TAILS, tendency))),
+                        seed)
+    return openers, lines, tails
 
 
 def render_tendency_variant(tendency: str, level, index: int = 0,
                             context: Dict[str, str] = None, agent_id: str = "") -> str:
-    """把「变体序号」拆成 动作×台词×收尾 三段组合并填槽，产出一条成段台词。"""
+    """把「变体序号」拆成 动作×台词×收尾 三段组合并填槽，产出一条成段台词。
+
+    任务#50：三段各自先按当前情景人设立场与当前情景道具过滤，再用 {sw} 给动作
+    加语气前缀；context 缺 sw 时按 agent_id 取默认语气，所以同一倾向在不同角色
+    下降级输出不再一个腔。pick 与 render 共用 _segments，序号→文本的映射一致。
+    """
     entry, bucket = _pool_and_bucket(tendency, level, agent_id)
     if not entry or bucket is None:
         return ""
-    openers = entry.get("openers") or [""]
-    lines = entry.get(bucket) or [""]
-    tails = entry.get("tails") or [""]
-    total = len(openers) * len(lines) * len(tails)
-    idx = int(index) % total
-    tail_i = idx % len(tails)
-    rest = idx // len(tails)
-    line_i = rest % len(lines)
-    opener_i = rest // len(lines)
-    body = _fill_slots(openers[opener_i] + lines[line_i] + tails[tail_i], context)
+    openers, lines, tails = _segments(entry, bucket, context, agent_id, tendency)
+    values = _slot_values(context, agent_id)
+    combos = _combo_list(tuple(openers), tuple(lines), tuple(tails))
+    if not combos:
+        return ""
+    opener_i, line_i, tail_i = combos[int(index) % len(combos)]
+    sw = _ctx_get(context, "sw") or DEFAULT_STYLE_BY_ROLE.get(agent_id, "")
+    opener = _merge_manner(openers[opener_i], sw)
+    body = _fill_slots(opener + lines[line_i] + tails[tail_i], values)
     return re.sub(r"\s+", " ", body).strip()
 
 
-def pick_variant_index(tendency: str, level, used=None, agent_id: str = "") -> int:
-    """在同倾向×同档的变体池里挑一个本会话还没用过的序号（池用尽则回到最早用过的）。"""
-    total = tendency_pool_size(tendency, level, agent_id)
+def pick_variant_index(tendency: str, level, used=None, agent_id: str = "",
+                       context=None) -> int:
+    """在同「倾向×档×角色」的变体池里挑一个本会话还没用过的序号。
+
+    used 与池大小都必须按同一套 (agent_id, context) 口径计算，否则筛选后的
+    池变小会让序号取模撞车，表现为降级台词逐字复读。
+    """
+    total = tendency_pool_size(tendency, level, agent_id, context)
     if total <= 0:
         return 0
     used_list = [int(u) % total for u in (used or []) if isinstance(u, (int, float, str)) and str(u).lstrip("-").isdigit()]
@@ -1427,13 +2666,15 @@ def pick_variant_index(tendency: str, level, used=None, agent_id: str = "") -> i
 
 def get_preset_response(agent_id: str, level: int, reaction_tendency: str = None,
                         used=None, context: Dict[str, str] = None) -> str:
-    """离线预设：倾向决定方向、level 决定严重度档；变体池 + 槽位保证成段且不逐字复读。
+    """离线预设：倾向决定方向、level 决定严重度档、**人设与情景决定用哪一条变体**。
 
-    used 传入本会话该「倾向×档」已用过的变体序号（来自 decision_log），实现轮转不重复。
+    used 传入本会话该「倾向×档×角色」已用过的变体序号（来自 decision_log），
+    实现轮转不重复；context 带 {sw}/_stance/_scene 时按当前情景人设渲染。
     """
     if reaction_tendency in TENDENCY_RESPONSES:
         text = render_tendency_variant(reaction_tendency, level,
-                                       pick_variant_index(reaction_tendency, level, used, agent_id),
+                                       pick_variant_index(reaction_tendency, level, used,
+                                                          agent_id, context),
                                        context, agent_id)
         if text:
             return text

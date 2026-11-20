@@ -13,7 +13,7 @@ from .graph_builder import get_llm_client
 import re  # 导入正则表达式模块，用于过滤思考内容
 
 # 导入思考内容过滤器
-from .thinking_filter import filter_thinking_content
+from .thinking_filter import filter_thinking_content, suspicious_think_markup
 
 
 # ============================================================
@@ -445,6 +445,20 @@ def _last_other_message(state: SharedState, agent_id: str):
     return None
 
 
+def _session_persona(state: SharedState, agent_id: str) -> dict:
+    """当前会话该角色的人设（情景 cast → 前端自定义覆盖后的 role_map 副本）。
+
+    只有 cast/自定义过人才会有 personality；缺失时返回 {}，由兜底链按角色
+    默认语气处理（立场记 neutral，即不改可选池，只换腔）。
+    """
+    role_map = getattr(state, "role_map", None) or {}
+    entry = role_map.get(agent_id) or {}
+    if not isinstance(entry, dict):
+        return {}
+    personality = entry.get("personality")
+    return personality if isinstance(personality, dict) else {}
+
+
 def _agent_logic(state: SharedState, agent_id: str,
                  llm_client=_DEFAULT_CLIENT, use_llm: bool = True) -> dict:
     """候选执行时只决策一次；规则只决定内容方向与强度，不再决定发言资格。
@@ -507,22 +521,29 @@ def _agent_logic(state: SharedState, agent_id: str,
     elif llm_client is _DEFAULT_CLIENT:
         llm_client = get_llm_client()
 
-    # 离线变体池轮转：同会话同「倾向×档」不逐字复读（决策证据记录已用序号）。
-    pool_key = tendency_pool_key(tendency, state.level, agent_id)
-    used_indices = [d.get("variant_index") for d in state.decision_log
-                    if d.get("pool_key") == pool_key and isinstance(d.get("variant_index"), int)]
-    variant_index = pick_variant_index(tendency, state.level, used_indices, agent_id)
+    # 离线变体池轮转：同会话同「倾向×档×角色」不逐字复读（决策证据记录已用序号）。
+    # 任务#50：槽位上下文必须先于 pool_key/序号构造，因为「人设立场 + 当前情景道具」
+    # 会改变可选池大小；pick 与 render 必须共用同一口径，否则序号取模撞车。
     last_other = _last_other_message(state, agent_id)
     slot_context = build_preset_context(
         agent_id=agent_id, level=state.level, agent_name=agent_name,
         other_name=(last_other.sender_name if last_other else ""),
         other_content=(last_other.content if last_other else ""),
         scenario_text=f"{state.scenario_title or ''} {state.scenario_description or ''}",
+        persona=_session_persona(state, agent_id),
     )
+    pool_key = tendency_pool_key(tendency, state.level, agent_id)
+    used_indices = [d.get("variant_index") for d in state.decision_log
+                    if d.get("pool_key") == pool_key and isinstance(d.get("variant_index"), int)]
+    variant_index = pick_variant_index(tendency, state.level, used_indices, agent_id,
+                                      slot_context)
     evidence["pool_key"] = pool_key
     evidence["variant_index"] = variant_index
     # 记录槽位上下文，便于事后复现离线变体（也是「为何是这句」的直接证据）。
     evidence["slot_context"] = dict(slot_context)
+    # 人设证据：降级台词为什么是这个腔、筛掉了哪一档，看这两栏即可复核。
+    evidence["persona_word"] = slot_context.get("sw", "")
+    evidence["persona_stance"] = slot_context.get("_stance", "neutral")
 
     source = "preset_offline"
     raw_text = ""
@@ -551,8 +572,15 @@ def _agent_logic(state: SharedState, agent_id: str,
                     f"- {m.sender_name}：{m.content[:240]}" for m in current_round_msgs
                 )
                 other_speech += "\n请针对上面最相关的一句作出你自己的具体回应，说你自己的一段话，不要照抄、不要重复已出现的台词。"
-            from .prompts import TENDENCY_LABEL_CN
+            from .prompts import (TENDENCY_LABEL_CN, AGGRESSIVE_FOLLOWER_AVOID_LABEL,
+                                  is_aggressive_follower_context)
             tendency_cn = TENDENCY_LABEL_CN.get(tendency, "按本轮规则给定的反应方向")
+            # 任务#82 B 线：s6 攻击型从众格即使本轮走 avoid，user 首句也不得钉成
+            # 「打哈哈装作不知情」的懦弱方向；只在该门控格替换，其他角色/情景不变。
+            if (tendency == "avoid" and is_aggressive_follower_context(
+                    agent_id, getattr(state, "scenario_title", ""),
+                    getattr(state, "role_map", None))):
+                tendency_cn = AGGRESSIVE_FOLLOWER_AVOID_LABEL
             response = llm_client.chat([
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": (
@@ -575,9 +603,13 @@ def _agent_logic(state: SharedState, agent_id: str,
                 response = filter_thinking_content(raw_text, agent_name)
                 print(f"  [DEBUG] {agent_name} after filter: {repr(response[:100])}")
                 evidence["kept_len"] = _net_len(response)
-                # 旧过滤器在纯 think 标签被清空时会返还原文，不能当成学生反应。
-                if (_unusable_response(response) or re.search(r"</?think\b", response, re.IGNORECASE)
-                        or not _speech_present(response)):
+                # v2026-11-14（Blocker 修复）：think 守卫必须看**过滤前**的 raw_text。
+                # 旧写法 re.search(r"</?think\b", response) 查的是过滤后文本——标签早被
+                # 删光，守卫恒不触发；未闭合/嵌套的 think 于是把整段推理留在台词里，
+                # 还能同时骗过 _unusable_response 与 _speech_present，统计上也看不出降级。
+                leaked = suspicious_think_markup(raw_text, response)
+                evidence["think_leak_suspect"] = leaked
+                if leaked or _unusable_response(response) or not _speech_present(response):
                     source = "preset_filtered_response"
                     response = None
         except Exception as e:

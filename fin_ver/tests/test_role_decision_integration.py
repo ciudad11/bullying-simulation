@@ -991,6 +991,91 @@ class RoleDecisionTests(unittest.TestCase):
         kept = filter_thinking_content("<think>内部推理</think>", "林雨桐")
         self.assertTrue(not kept or "内部推理" not in kept)
 
+    # ---------- 契约6b：think 泄漏守卫看原文（审查 Blocker 回归） ----------
+    UNCLOSED_THINK = ("<think>\n先分析：他为什么不说话，我该不该继续\n\n"
+                      "（攥拳）你凭什么这么说我")
+    NESTED_THINK = ("<think>\n先分析：他在试探我\n<thinking>\n陈浩说的是「你不行」，我得回应\n</thinking>\n"
+                    "</think>\n残留推理文本：你应该冷静一点，别把事情闹大。</think>\n\n"
+                    "（垂下眼）我知道了，不说了。")
+    TIDY_THINK = ("<think>\n先分析局势，再决定语气\n</think>\n\n"
+                  "（抬眼）这事我不管，你们自己商量。")
+    REASONING_PROBES = ("先分析", "试探", "我该不该继续", "我得回应", "你应该冷静")
+
+    def test_malformed_think_downgrades_to_preset_instead_of_leaking(self):
+        """未闭合 / 嵌套 think：推理正文不得进转录，证据必须记为降级来源（可统计）。"""
+        from multi_agent.thinking_filter import suspicious_think_markup
+        for raw in (self.UNCLOSED_THINK, self.NESTED_THINK):
+            with self.subTest(raw=raw[:20]):
+                self.assertTrue(suspicious_think_markup(raw), "守卫必须对过滤前原文判真")
+                state = state_for([msg("victim", "你能不能别当着我面说这些。")])
+                self.apply(state, "bully", FakeClient(raw))
+                ev = state.decision_log[-1]
+                self.assertEqual(ev["generation_source"], "preset_filtered_response", ev)
+                self.assertTrue(ev.get("think_leak_suspect"), ev)
+                line = state.messages[-1].content
+                for probe in self.REASONING_PROBES:
+                    self.assertNotIn(probe, line, line)
+                self.assertTrue(speech_only(line), line)
+
+    def test_wellformed_think_pair_is_not_misreported_as_downgrade(self):
+        """反向保护：规矩的成对标签仍走 llm 来源，且不得把剥离下来的推理留在台词里。"""
+        from multi_agent.thinking_filter import extract_dialogue_only, suspicious_think_markup
+        out = extract_dialogue_only(self.TIDY_THINK, "刘洋")
+        self.assertFalse(suspicious_think_markup(self.TIDY_THINK, out))
+        self.assertNotIn("先分析局势", out)
+        self.assertIn("你们自己商量", out)
+        state = state_for([msg("victim", "……我没有别的意思。")])
+        self.apply(state, "bystander_b", FakeClient(self.TIDY_THINK))
+        ev = state.decision_log[-1]
+        self.assertEqual(ev["generation_source"], "llm", ev)
+        self.assertFalse(ev.get("think_leak_suspect"), ev)
+
+    # ---------- 契约6c：段级过滤——他人转述段与纯旁白不合成台词（审查 Major 回归） ----------
+    def test_reported_speech_paragraph_is_not_merged_into_current_role_line(self):
+        from multi_agent.thinking_filter import extract_dialogue_only
+        raw = ("陈浩说：「你别太过分了，这事儿明明是你先起的头。」\n\n"
+               "（低头）你别这样说，我也没做什么。")
+        out = extract_dialogue_only(raw, "思远")
+        self.assertNotIn("你先起的头", out, out)
+        self.assertNotIn("你别太过分了", out, out)
+        self.assertIn("你别这样说", out)
+
+    def test_pure_narration_returns_empty_and_downgrades(self):
+        from multi_agent.thinking_filter import extract_dialogue_only
+        raw = "（教室里安静下来，只有翻书的声音）\n\n（他转过头去，没有看你）"
+        self.assertEqual(extract_dialogue_only(raw, "陈浩").strip(), "", "纯旁白不得合成台词")
+        state = state_for([msg("victim", "……我不想说这些。")])
+        self.apply(state, "bully", FakeClient(raw))
+        ev = state.decision_log[-1]
+        self.assertEqual(ev["generation_source"], "preset_filtered_response", ev)
+        self.assertTrue(speech_only(state.messages[-1].content), state.messages[-1].content)
+
+    # ---------- 契约6d：去重丢弃的消息不送评估，且留下可观测证据 ----------
+    def test_deduplicated_message_is_not_evaluated_and_leaves_evidence(self):
+        state = create_initial_state()
+        state.round = 3
+        state.messages = []
+        state.pending_messages = []
+        state.decision_log = []
+        runner = StepRunner(state, None, use_llm=False)
+        m1 = Message("bully", "徐凯", "bully", "第一句台词。", round=3)
+        m2 = Message("bully", "徐凯", "bully", "第二句重复轮次台词。", round=3)
+        runner._merge_result({"messages": [m1], "pending_messages": [m1]})
+        # 故意把 pending_messages 排在 messages 之前：待评估过滤必须以转录为权威
+        runner._merge_result({"pending_messages": [m1, m2], "messages": [m2]})
+        self.assertEqual([m.content for m in state.messages if m.sender_id == "bully"],
+                         ["第一句台词。"], state.messages)
+        self.assertEqual([m.content for m in state.pending_messages], ["第一句台词。"],
+                         "被去重丢弃的消息不得进入待评估列表")
+        self.assertTrue(any(d.get("deduplicated") for d in state.decision_log), state.decision_log)
+        # 节点每轮返回「既有消息 + 新消息」的整表回显，不得被记成去重丢弃（证据污染回归）
+        echo = Message("victim", "思远", "victim", "先让我把话说完。", round=3)
+        state.messages.append(echo)
+        runner._merge_result({"messages": list(state.messages) + [m1], "pending_messages": []})
+        self.assertEqual(sum(1 for d in state.decision_log if d.get("deduplicated")), 1,
+                         state.decision_log)
+        self.assertEqual([m.content for m in state.messages], ["第一句台词。", "先让我把话说完。"])
+
     # ---------- 契约7：可观测性（[DEBUG] 日志 + raw/kept 字数 + 来源） ----------
     def test_debug_logs_and_evidence_metrics_restored(self):
         state = state_for([msg("victim", "你别再盯着我说话了。")])
@@ -1016,6 +1101,1348 @@ class RoleDecisionTests(unittest.TestCase):
         self.assertEqual(ev["error_type"], "RuntimeError")
         self.assertNotIn("fake client error", json.dumps(ev, ensure_ascii=False))
         self.assertGreater(ev["kept_len"], 20)
+
+
+# ============================================================
+# 任务#60 返工断言集（Blocker-1 根因 A/B、Major-1..4）
+# ------------------------------------------------------------
+# 全部离线：只调 llm_client / prompts / thinking_filter 的纯函数，不 import Flask、
+# 不起服务、不调真实 LLM、不读数据库。情景数据用 ast 静态取 web/app.py 的 `_scenarios`。
+# ============================================================
+
+from multi_agent import llm_client as L
+from multi_agent import prompts as PR
+from multi_agent.thinking_filter import extract_dialogue_only
+
+
+def _load_scenarios():
+    import ast
+    app_py = Path(__file__).resolve().parents[1] / "web" / "app.py"
+    tree = ast.parse(app_py.read_text(encoding="utf-8"))
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+                getattr(t, "id", None) == "_scenarios" for t in node.targets):
+            return ast.literal_eval(node.value)
+    raise AssertionError("web/app.py 里找不到 _scenarios")
+
+
+def _cast_persona(scenario, role):
+    return ((scenario.get("cast") or {}).get(role) or {}).get("personality") or {}
+
+
+def _ctx(scenario, role, persona, level=2):
+    return L.build_preset_context(agent_id=role, level=level, agent_name="林小满",
+                                  other_name="陈浩", other_content="你再说一遍试试",
+                                  scenario_text=scenario.get("description", ""),
+                                  persona=persona)
+
+
+# 一次真实会话的取号跨度上限：AUTO_END_CONFIG["max_rounds"] 默认 40，一轮最多 3 名
+# 候选发言者，落在同一个「倾向×档×角色」池上的序号数不会超过 40。
+SESSION_SPAN = 40
+ROLES = ("bully", "victim", "bystander_a", "bystander_b")
+
+# 任务#60-2：「幕后递话/撇清」族的可复核口径。这批标记必须覆盖
+# `_PERSONA_INDIRECT_LINES/TAILS` 的每一条模板（test_h1 先断言这一点），
+# 因此用它判定「某条产出属不属于这一族」不依赖人工形容词分类。
+# 注意标记词的**精确度**同样重要：口径只能落在操控族模板上，不能顺手命中
+# 26 键正常池句。曾把这条写成裸的「有人替」，于是 victim 的
+# `thank_relieved@high`「有人替我说话，我好久没这么安心了」被误判成越界——
+# 那是被保护者表达感激，不是递话撇清。故一律带完整族短语。
+_COVERT_MARKS = (
+    "我没当面讲", "没当面讲过", "不赖我", "替我去讲", "有人替我提", "别说是我",
+    "我什么都没说过", "不是我挑的头", "用不着我", "我不当众讲", "回头有人跟你提",
+    "这话传到哪儿去", "挨个问一圈", "这账不是", "后面传成", "我不提第二遍",
+    "各自有杆秤", "别来问我", "替不了", "我也管不了", "这事我不管",
+    "是你的事", "别人不肯跟你走", "我没动过你", "后面怎么算",
+    "别人有别人的办法", "你别往我心里去", "我说了不算", "总有人替",
+    "话我不能当面讲", "谁在背后讲", "别人怎么想", "我不拦谁", "不当面说人",
+    # 任务#64 P0-A 新增 27 条操控族文案的覆盖词（`test_h1` 先断言 48/48 全覆盖，
+    # 否则扩库之后「bystander_a/victim 0 命中」就退化成空断言）。逐条按
+    # 「只出现在操控族、不出现在 firm/mediate 库与 26 键池句」选词，取证见
+    # `test_evidence/integration_check_20261115/rework_64/probes/q11_p0a_copy_check.py`。
+    # 两个踩过的坑写在这里：**不带 `{obj}`**（标记是对**渲染后**文本判的，槽位已被
+    # 填掉，含槽位的标记永远命不中）；不用裸「做文章」（mediate 族
+    # 「省得有人借它做文章」会被误判成操控）。
+    "当着谁的面讲", "不代表我说过", "一个字都不用说", "没传过话", "一句中立的话",
+    "我就讲了那么一句", "我不提第一遍", "碰都没碰", "我这儿没有答案",
+    "不接话，也不拦", "做成做不成", "只笑一下", "不管就是不管", "我从不催谁",
+    "只听了我半句话", "说得客客气气", "我要真想怎么样", "别人的嘴我管不着",
+    "只是闲话", "有人替我分", "有人替我盯着", "周围有谁在笑", "只是句闲话",
+    "换个地方待着", "问到第三遍", "算到我头上", "我只是没拦",
+)
+
+
+def _covert_hits(text):
+    return [m for m in _COVERT_MARKS if m in (text or "")]
+
+
+# 用户可自己填的人设（自定义参与者 traits / 自建情景 cast）：这类写法会把
+# bystander_a 判成 indirect，是 32 个预设格之外、但线上真实可达的形态。
+_INDIRECT_A_PERSONA = {"traits": ["说话客气", "背后替她说话"], "speakingStyle": ["慢"],
+                       "cognitiveStyle": "先把话停在半句", "background": "班里谁都不想得罪"}
+
+# 任务#60-3：同样形态的**受害者**人设（用户在自定义参与者/自建情景 cast 里填
+# 「说话客气 / 背后…」这类词就能造出来），验证 victim+indirect 不再借到操控族。
+_INDIRECT_V_PERSONA = {"traits": ["说话客气", "背后替她说话"], "speakingStyle": ["慢"],
+                       "cognitiveStyle": "先把话停在半句", "background": "被孤立半年，谁都不想先开口"}
+
+# 任务#64：从众旁观者的**真·幕后操控型**人设（自定义参与者/自建情景 cast 写得出）。
+# P0-B 之后 s2/s5 的预设 cast（起哄/附和/看热闹）落 soft，操控族只能由这类人设进入，
+# `test_h2` 的「渲染可达」口径就用它。
+_INDIRECT_B_PERSONA = {"traits": ["背后传话", "爱使眼色"], "speakingStyle": ["阴阳怪气"],
+                       "cognitiveStyle": "先把话递给谁", "background": "班里谁跟谁不对付他最清楚"}
+
+
+class Rework60PersonaReworkTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.scenarios = _load_scenarios()
+        cls.tendencies = sorted(TENDENCY_RESPONSES.keys())
+        assert len(cls.tendencies) == 26, "26 键契约被改动"
+
+    # ---------- A（Blocker-1 根因 A）：立场必须判得出来 ----------
+    def test_a1_no_cast_cell_classifies_all_neutral(self):
+        """8 情景 × 4 角色：每个人设至少能定出一个立场（全 neutral 的格子必须为 0）。"""
+        bad = []
+        for i, sc in enumerate(self.scenarios):
+            for role in ROLES:
+                if not (sc.get("cast") or {}).get(role):
+                    continue
+                persona = _cast_persona(sc, role)
+                words, stance = L.classify_persona(persona)
+                if stance == "neutral":
+                    bad.append(f"s{i+1}/{role}")
+        self.assertEqual(bad, [], f"仍有人设整档判 neutral：{bad}")
+
+    def test_a2_six_bully_manipulation_words_get_indirect_stance(self):
+        """用户点名的 s6 九个词必须落到可筛选立场，而不是 neutral（「当面软、背后硬」）。"""
+        persona = _cast_persona(self.scenarios[5], "bully")
+        want = ["当面客气", "笑着说话", "暗示", "指使", "表面礼貌", "背后操控",
+                "拉帮结派", "冷暴力", "控制欲强"]
+        for w in want:
+            self.assertNotEqual(L._word_stance(w), "neutral", w)
+        self.assertEqual(L.classify_persona(persona)[1], "indirect")
+
+    def test_a3_negated_persona_words_do_not_flip_stance(self):
+        """Minor-1 顺手做掉：否定式人设词不许把人设判反。"""
+        for w in ("不敢拒绝", "不凶", "没威胁过谁"):
+            self.assertEqual(L._word_stance(w), "soft", w)
+        for w in ("天不怕地不怕", "什么都不怕"):
+            self.assertEqual(L._word_stance(w), "firm", w)
+
+    def test_a4_indirect_output_has_no_face_to_face_confrontation(self):
+        """s6 霸凌者产出必须是「借手/递话/敲打」，不许留当面威逼的动作与台词。"""
+        sc = self.scenarios[5]
+        persona = _cast_persona(sc, "bully")
+        for role in ("bully",):
+            for tendency in self.tendencies:
+                for level in (1, 2, 3, 4, 5):
+                    entry, bucket = L._pool_and_bucket(tendency, level, role)
+                    if not entry or bucket is None:
+                        continue
+                    openers, lines, tails = L._segments(
+                        entry, bucket, _ctx(sc, role, persona, level), role, tendency)
+                    for t in lines:
+                        self.assertFalse(L._is_direct_confront_speech(t),
+                                         f"{tendency}@L{level} 台词仍当面威逼：{t}")
+                    for t in tails:
+                        self.assertFalse(L._is_direct_confront_speech(t),
+                                         f"{tendency}@L{level} 收尾仍当面威逼：{t}")
+                    for t in openers:
+                        self.assertFalse(L._is_direct_confront_action(t),
+                                         f"{tendency}@L{level} 动作仍当面威逼：{t}")
+
+    def test_a5_manner_prefix_not_pasted_when_incompatible(self):
+        """根因 A 的第 2 步（选定口径：相容性门禁）：立场不相容时不贴语气词。"""
+        self.assertEqual(L._merge_manner("（斜着眼，往前逼了一步）", "当面客气"),
+                         "（斜着眼，往前逼了一步）",
+                         "「当面客气」不许贴在当面挑衅的动作前面")
+        self.assertEqual(L._merge_manner("（低着头，往后退了半步）", "嘴硬"),
+                         "（低着头，往后退了半步）")
+        # 相容时仍照旧前置（不破坏无矛盾场景的既有行为）
+        self.assertEqual(L._merge_manner("（把话头递给旁边的人）", "当面客气"),
+                         "（当面客气，把话头递给旁边的人）")
+
+    # ---------- B（Blocker-1 根因 B）：补底不得回填示弱句 ----------
+    def test_b1_firm_pool_has_no_soft_backfill_and_no_wraparound(self):
+        """firm/indirect 格子：一个真实会话跨度内取到的序号里 0 条示弱句，
+        且池深度 ≥ 跨度 ⇒ 不会因池太小回绕成逐字复读（#54 缺陷）。"""
+        cells = 0
+        min_pool = None
+        soft_hits = []
+        for i, sc in enumerate(self.scenarios):
+            for role in ROLES:
+                persona = _cast_persona(sc, role)
+                if not persona:
+                    continue
+                stance = L.classify_persona(persona)[1]
+                if stance not in ("firm", "indirect"):
+                    continue
+                for tendency in self.tendencies:
+                    for level in (1, 2, 3, 4, 5):
+                        ctx = _ctx(sc, role, persona, level)
+                        size = L.tendency_pool_size(tendency, level, role, ctx)
+                        min_pool = size if min_pool is None else min(min_pool, size)
+                        cells += 1
+                        for idx in range(min(SESSION_SPAN, size)):
+                            text = L.render_tendency_variant(tendency, level, idx, ctx, role)
+                            body = re.sub(r"[（(][^（()）]*[）)]", "", text)
+                            if L._is_soft_speech(body):
+                                soft_hits.append(f"s{i+1}/{role}/{tendency}@L{level}#{idx}:{body[:24]}")
+        self.assertEqual(soft_hits[:8], [], f"跨度内仍出现示弱句 {len(soft_hits)} 处，例：{soft_hits[:8]}")
+        self.assertGreaterEqual(min_pool, SESSION_SPAN,
+                                f"最小池 {min_pool} < 会话跨度 {SESSION_SPAN} ⇒ 会回绕复读")
+        self.assertGreaterEqual(cells, 100, "覆盖格子数异常（立场筛选没跑到 firm/indirect 格子）")
+
+    def test_b2_s8_hard_victim_first_screen_is_not_soft(self):
+        """用户第一例：s8 放学路上的威胁，受害者不该软弱（审查实测 12/12 → 必须 0/12）。"""
+        sc = self.scenarios[7]
+        persona = _cast_persona(sc, "victim")
+        self.assertEqual(L.classify_persona(persona)[1], "firm")
+        for tendency in ("withdraw", "endure_quietly", "wait_observe", "avoid",
+                         "silent_resist", "resist_follow"):
+            if tendency not in TENDENCY_RESPONSES:
+                continue
+            for level in (1, 2, 3, 4, 5):
+                ctx = _ctx(sc, "victim", persona, level)
+                body = [re.sub(r"[（(][^（()）]*[）)]", "",
+                               L.render_tendency_variant(tendency, level, k, ctx, "victim"))
+                        for k in range(12)]
+                self.assertEqual([t for t in body if L._is_soft_speech(t)], [],
+                                 f"{tendency}@L{level} 首屏 12 条里有示弱句")
+
+    # ---------- C（Major-4）：swap 库只在「该档被筛空」时启用 ----------
+    def test_c1_swap_library_used_only_when_bucket_emptied(self):
+        """库句只在「该档被筛空/筛薄」时补，而且补的是**本倾向窗口**。
+
+        任务#64 P0-A 改了补底来源，旧口径「原池筛空 ⇒ 必须能看到库句」已经不等价：
+        兄弟档（同倾向另一档）现在是第一顺位补底来源，兄弟档供满 3 条时库句贡献
+        0 条，行为仍然正确（实测 `endure_quietly@L1` 就是这种格子）。所以这条拆成
+        两个真正的不变量：
+          ① 原池过闸后非空 ⇒ 保留句**一条不少**，且库句最多只补到 `_MIN_FIRM_SEGMENTS`
+             （不许整档粘贴——#60 的 78% 库句占比就是这么来的）；
+          ② 原池被筛空 ⇒ 输出的每一句都必须来自「本倾向可用来源」
+             （本倾向兄弟档 ∪ 本倾向库窗口），且条数补到 `floor`，
+             **绝不回落到整库**（回落会把成员级差异化抵消，见 `test_p0a4`）。
+        """
+        floor = L._MIN_FIRM_SEGMENTS
+        for i, sc in enumerate(self.scenarios):
+            for role in ROLES:
+                persona = _cast_persona(sc, role)
+                stance = L.classify_persona(persona)[1] if persona else "neutral"
+                if stance not in ("firm", "indirect"):
+                    continue
+                for tendency in L._FIRM_SWAP_TENDENCIES:
+                    for level in (1, 2, 3, 4, 5):
+                        entry, bucket = L._pool_and_bucket(tendency, level, role)
+                        lib_lines = L._stance_lib(
+                            stance, "high" if bucket == "high" else "low", role)[0]
+                        orig = list(entry.get(bucket) or [])
+                        sib = list(entry.get("high" if bucket == "low" else "low") or [])
+                        ctx = _ctx(sc, role, persona, level)
+                        _o, lines, _t = L._segments(entry, bucket, ctx, role, tendency)
+                        win = set(L._tendency_window(lib_lines, tendency))
+                        lib = set(lib_lines)
+                        where = f"s{i+1}/{role}/{tendency}@L{level}"
+                        scene = L._ctx_get(ctx, "_scene")
+                        # `keep` 必须与 `_segments` 同口径：**先**过情景门禁（道具词 +
+                        # 活动证据），**再**过立场门禁。少了前半段就会把「本情景里没有
+                        # 的作业/画笔」这类句子算成「应当保留」，s1/observe_quiet@L1 的
+                        # 「我还写着呢」正是这样被误报成丢句。
+                        keep = [t for t in orig
+                                if not (scene and L._scene_foreign(t, scene))
+                                and not L._is_soft_speech(t)
+                                and not (stance == "indirect"
+                                         and L._is_direct_confront_speech(t))]
+                        if keep:
+                            missing = [t for t in keep if t not in lines]
+                            self.assertEqual(missing, [],
+                                             f"{where} 原池非空却丢了保留句：{missing[:2]}")
+                            self.assertLessEqual(len([t for t in lines if t in lib]),
+                                                 max(0, floor - len(keep)),
+                                                 f"{where} 原池非空仍过量粘贴库句")
+                        else:
+                            self.assertTrue(lines, f"{where} 原池筛空后一句不剩")
+                            foreign = [t for t in lines if t not in win and t not in set(sib)]
+                            self.assertEqual(foreign, [],
+                                             f"{where} 补底出现了非本倾向来源的句子：{foreign[:2]}")
+                            self.assertGreaterEqual(len(lines), min(floor, len(set(sib) | win)),
+                                                    f"{where} 补底不足 {floor} 条")
+
+    def test_c2_firm_and_indirect_tails_carry_scene_anchor(self):
+        """库句收尾必须带 `{obj}` 或情景限定词，否则门禁削减不到它（Major-4 的根）。
+        台词段故意不逐条带 {obj}：head 与 tail 各带同一个动态槽位会被 `_echo_grade`
+        判成「共用槽位」硬重复而剔掉组合，实测把池压到 6 条 ⇒ 长会话回绕复读
+        （#54 缺陷）。锚点由 tails 承担，lines 只需整族里存在锚点句即可。"""
+        for stance in ("firm", "indirect"):
+            for bucket in ("low", "high"):
+                # indirect 现在按角色分族（任务#60-2），四个角色都要过同一道锚点断言
+                for role in ROLES:
+                    lines, tails, openers = L._stance_lib(stance, bucket, role)
+                    self.assertTrue(tails and openers, f"{stance}/{bucket}/{role} 库为空")
+                    for t in tails:
+                        self.assertTrue(L._has_scene_anchor(t),
+                                        f"{stance}/{bucket}/{role} 收尾缺情景锚点：{t}")
+                    soft_tails = [t for t in tails if L._is_soft_speech(t)]
+                    self.assertEqual(soft_tails, [],
+                                     f"{stance}/{bucket}/{role} 库收尾示弱：{soft_tails}")
+
+    def test_c3_cross_scenario_bodies_not_all_identical(self):
+        """同 (角色,倾向,档,序号) 的**正文**（剥掉动作括注）不得 8 情景逐字相同。"""
+        probe = [("victim", "wait_observe", 2), ("victim", "endure_quietly", 2),
+                 ("bully", "provoke", 2), ("bully", "low_intensity_taunt", 1),
+                 ("bystander_a", "support_victim", 2), ("bystander_b", "follow_majority", 2)]
+        flat_text_cells = []
+        for role, tendency, level in probe:
+            if tendency not in TENDENCY_RESPONSES:
+                continue
+            for idx in range(12):
+                bodies = []
+                for sc in self.scenarios:
+                    persona = _cast_persona(sc, role)
+                    ctx = _ctx(sc, role, persona, level)
+                    text = L.render_tendency_variant(tendency, level, idx, ctx, role)
+                    bodies.append(re.sub(r"[（(][^（()）]*[）)]", "", text))
+                uniq = set(b for b in bodies if b)
+                if len(uniq) == 1 and len(bodies) == len(self.scenarios):
+                    flat_text_cells.append(f"{role}/{tendency}@L{level}#{idx}")
+        self.assertEqual(flat_text_cells, [],
+                         f"{len(flat_text_cells)} 个格子 8 情景正文逐字相同：{flat_text_cells[:6]}")
+
+    # ---------- D（Major-1）：尾块硬编码性格必须按 cast/立场条件化 ----------
+    HARD_CODED = {
+        "bully": ["你喜欢点评别人、压人一头", "（不屑地笑）", "（翻了个白眼）"],
+        "victim": ["极度尴尬、想躲藏", "（低着头）、（眼眶泛红）"],
+        "bystander_a": ["（不屑地笑）", "（翻了个白眼）"],
+        "bystander_b": ["（不屑地笑）", "（翻了个白眼）"],
+    }
+
+    def _role_map(self, scenario):
+        return {role: {"name": ((scenario.get("cast") or {}).get(role) or {}).get("name"),
+                       "role": role,
+                       "role_name": ((scenario.get("cast") or {}).get(role) or {}).get("role_name"),
+                       "personality": _cast_persona(scenario, role)}
+                for role in ROLES}
+
+    def test_d1_cast_persona_removes_hardcoded_tail_text(self):
+        for i, sc in enumerate(self.scenarios):
+            rm = self._role_map(sc)
+            for role, marks in self.HARD_CODED.items():
+                persona = _cast_persona(sc, role)
+                if L.classify_persona(persona)[1] == "neutral":
+                    continue
+                sp = PR.build_system_prompt(role, 3, "（甲：你好）", sc["title"],
+                                            sc["description"], role_map=rm)
+                for m in marks:
+                    self.assertNotIn(m, sp, f"s{i+1}/{role} 尾块仍写死：{m}")
+
+    def test_d2_victim_soft_volume_line_is_stance_derived(self):
+        """「你的话可以小声、断续、退缩」只在 **立场=soft** 时保留（那句话本身就是
+        对 soft 人设的描述）；firm/indirect 必须换成派生措辞。"""
+        mark = "你的话可以小声、断续、退缩"
+        for i, sc in enumerate(self.scenarios):
+            persona = _cast_persona(sc, "victim")
+            stance = L.classify_persona(persona)[1]
+            sp = PR.build_system_prompt("victim", 2, "", sc["title"], sc["description"],
+                                        role_map=self._role_map(sc))
+            if stance in ("firm", "indirect"):
+                self.assertNotIn(mark, sp, f"s{i+1} victim/{stance} 仍写死音量句")
+            else:
+                self.assertIn(mark, sp, f"s{i+1} victim/{stance} 音量句应保留")
+
+    def test_d3_no_cast_prompts_keep_original_wording(self):
+        """回归保护：没有 cast/自定义人设时，尾块逐字保留原文案（不破坏既有行为）。"""
+        for role, marks in self.HARD_CODED.items():
+            sp = PR.build_system_prompt(role, 3, "（甲：你好）", "课间", "明天要交作品",
+                                        role_map=None)
+            for m in marks:
+                self.assertIn(m, sp, f"{role} 无 cast 时原文案丢失：{m}")
+
+    def test_d4_stance_helper_never_breaks_prompt_build(self):
+        self.assertEqual(PR._persona_stance({}), "neutral")
+        self.assertEqual(PR._persona_stance(None), "neutral")
+        self.assertEqual(PR._persona_stance({"traits": ["不肯服软"]}), "firm")
+        sp = PR.build_system_prompt("victim", 2, "", "t", "d",
+                                    role_map={"victim": {"name": "X", "role": "victim",
+                                                          "personality": None}})
+        self.assertIn("你的角色", sp)
+
+    # ---------- E（Major-3）：单段主路径也要做归属过滤 ----------
+    def test_e1_single_paragraph_other_report_is_dropped(self):
+        raw = "陈浩说：「你别太过分了，所有人都别理她。」"
+        self.assertEqual(extract_dialogue_only(raw, "思远"), "",
+                         "单段（主流形态）里他人原话仍被当成本角色台词")
+
+    def test_e2_single_paragraph_own_report_and_plain_speech_kept(self):
+        """放行面：本人第三人称自述、正常台词、括注+台词都不许被误杀。"""
+        self.assertEqual(extract_dialogue_only("思远说：我没太过分。", "思远"),
+                         "思远说：我没太过分。")
+        self.assertEqual(extract_dialogue_only("（低下头）你们别这样。", "思远"),
+                         "（低下头）你们别这样。")
+        self.assertEqual(extract_dialogue_only("这事我不认。", "思远"), "这事我不认。")
+
+    def test_e3_pure_parenthetical_single_paragraph_downgrades(self):
+        self.assertEqual(extract_dialogue_only("（低下头）（往后退了一步）", "思远"), "",
+                         "纯括注单段与多段口径不一致")
+
+    def test_e4_merge_limit_does_not_touch_single_paragraph(self):
+        """`MERGE_PARAGRAPH_LIMIT` 只作为 `_limit_merge` 的默认值参与**多段**合并；
+        改默认值不改函数（默认值在 def 时就绑定了），所以只改常量是空断言。
+        这里同时钉住两件事：单段路径根本不调 `_limit_merge`，多段路径调且受上限约束。"""
+        import multi_agent.thinking_filter as TF
+        raw = "你别太过分了，所有人都别理她。"
+        for limit in (1, 2, 3, 99):
+            old_const, old_fn = TF.MERGE_PARAGRAPH_LIMIT, TF._limit_merge
+            calls = []
+            TF.MERGE_PARAGRAPH_LIMIT = limit
+            TF._limit_merge = (lambda kept, _l=limit, _c=calls:
+                               (_c.append(len(kept)), kept[-_l:] if len(kept) > _l else kept)[1])
+            try:
+                self.assertEqual(extract_dialogue_only(raw, "思远"), raw, f"limit={limit}")
+                self.assertEqual(calls, [], f"limit={limit} 单段路径不应进入 _limit_merge")
+            finally:
+                TF.MERGE_PARAGRAPH_LIMIT, TF._limit_merge = old_const, old_fn
+        multi = "第一段台词。\n\n第二段台词。\n\n第三段台词。"
+        old_fn = TF._limit_merge
+        for limit, expect in ((1, 1), (2, 2), (99, 3)):
+            TF._limit_merge = lambda kept, _l=limit: kept[-_l:] if len(kept) > _l else kept
+            try:
+                got = len(extract_dialogue_only(multi, "思远").split("\n\n"))
+                self.assertEqual(got, expect, f"多段 limit={limit} 合并段数")
+            finally:
+                TF._limit_merge = old_fn
+        self.assertEqual(TF.MERGE_PARAGRAPH_LIMIT, 2, "上限常量本身不得被本轮改动")
+
+    def test_e5_multi_paragraph_contract_unchanged(self):
+        raw = ("陈浩说：「你别太过分了，这事儿明明是你先起的头。」\n\n"
+               "（低头）你别这样说，我也没做什么。")
+        out = extract_dialogue_only(raw, "思远")
+        self.assertNotIn("你先起的头", out)
+        self.assertIn("你别这样说", out)
+
+    # ---------- F（Major-2）：前端档案卡优先级 = 后端生效优先级 ----------
+    def test_f1_frontend_persona_priority(self):
+        import shutil
+        import subprocess
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("本机没有 node，前端纯函数用例跳过（已在 rework_60 探针中手工跑过）")
+        root = Path(__file__).resolve().parents[1]
+        probe = root / "tests" / "frontend" / "display_persona_probe.js"
+        self.assertTrue(probe.exists(), f"缺少前端用例脚本：{probe}")
+        p = subprocess.run([node, str(probe.relative_to(root).as_posix())],
+                           cwd=str(root), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                           text=True, encoding="utf-8", errors="replace")
+        out = (p.stdout or "").strip()
+        self.assertEqual(p.returncode, 0, out)
+        self.assertIn("全部通过", out)
+
+    # ---------- H（任务#60-2）：indirect 库句族按角色门控 ----------
+    def test_h1_bystander_a_indirect_never_emits_covert_family(self):
+        """PM 裁定：正义旁观者不做幕后操控。
+        「幕后递话/撇清族」的口径不是形容词——`_COVERT_MARKS` 必须覆盖操控族
+        每一条台词/收尾模板（本测试先断言这条完备性），再用同一批标记词判定产出，
+        这样「0 命中」不依赖人工分类。范围：26 倾向 × L1–L5 × 序号 0–2。
+        同时守住霸凌者/从众旁观者仍可借手（s4/s6/s2/s5 的 A 项修复不得被削）。"""
+        # 族定义完备性：操控族每条台词/收尾都要含标记词，否则「0 命中」是空断言
+        for bucket in ("low", "high"):
+            for t in L._PERSONA_INDIRECT_LINES[bucket] + L._PERSONA_INDIRECT_TAILS[bucket]:
+                self.assertTrue(_covert_hits(t), f"操控族模板未被标记覆盖：{t}")
+        # 专用族纯度：正义旁观者拿到的模板本身不得含操控标记
+        for bucket in ("low", "high"):
+            lines, tails, openers = L._stance_lib("indirect", bucket, "bystander_a")
+            self.assertTrue(lines and tails and openers, "bystander_a 专用族为空")
+            for t in lines + tails:
+                self.assertEqual(_covert_hits(t), [], f"专用族混入操控句：{t}")
+        # 门控表：bystander_a=mediate、victim=firm（任务#60-3），其余角色仍走操控族
+        self.assertEqual(L._indirect_lib("low", "bully")[0], L._PERSONA_INDIRECT_LINES["low"])
+        self.assertEqual(L._indirect_lib("low", "bystander_b")[0],
+                         L._PERSONA_INDIRECT_LINES["low"])
+        self.assertEqual(L._indirect_lib("low", "victim")[0], L._PERSONA_FIRM_LINES["low"])
+        self.assertNotEqual(L._indirect_lib("low", "victim")[0],
+                            L._PERSONA_INDIRECT_LINES["low"])
+        self.assertNotEqual(L._indirect_lib("low", "bystander_a")[0],
+                            L._PERSONA_INDIRECT_LINES["low"])
+
+        sc = self.scenarios[0]
+        a_hits, a_cells, a_min_pool = 0, 0, None
+        for tendency in self.tendencies:
+            for level in (1, 2, 3, 4, 5):
+                ctx = _ctx(sc, "bystander_a", _INDIRECT_A_PERSONA, level)
+                self.assertEqual(ctx.get("_stance"), "indirect", "注入人设必须落 indirect")
+                size = L.tendency_pool_size(tendency, level, "bystander_a", ctx)
+                a_min_pool = size if a_min_pool is None else min(a_min_pool, size)
+                for idx in range(3):
+                    text = L.render_tendency_variant(tendency, level, idx, ctx, "bystander_a")
+                    a_cells += 1
+                    self.assertTrue(text.strip(), f"bystander_a/{tendency}@L{level}#{idx} 空文本")
+                    hits = _covert_hits(text)
+                    if hits:
+                        a_hits += 1
+                        self.fail(f"正义旁观者产出幕后递话/撇清族：{tendency}@L{level}#{idx} "
+                                  f"{hits} ⇒ {text[:60]}")
+        self.assertEqual(a_hits, 0)
+        # 新族不能把池压到会话跨度以下（否则长会话回绕复读，违反 #54-7 的初衷）
+        self.assertGreaterEqual(a_min_pool, SESSION_SPAN,
+                                f"bystander_a indirect 最小池 {a_min_pool} < 跨度 {SESSION_SPAN}")
+
+    def test_h2_covert_family_still_available_to_bully_and_follower(self):
+        """反向保底：门控不能把「借手族」削掉（#60-2 A 项修复的落点）。
+
+        任务#64 P0-B 改了判定口径之后，s2/s5 从众旁观者的 cast 词（起哄/附和/
+        看热闹/事不关己）**不再判 indirect 而是 soft**——审查#61 F3 点名的正是
+        「s5 在旁边起哄、看热闹，被演成『我什么都没说过』」，所以这两格落 soft 是
+        **本批交付**而不是回退（逐词判定表与 32 格集合取证：
+        `test_evidence/integration_check_20261115/rework_64/out/q14_p0b_diff.json`，
+        常驻断言见 `test_b3_p0b_indirect_overfire_fixed`）。于是这条「反向保底」
+        不能再只拿 s2/s5 的**渲染**当口径，改成互补的两条：
+          ① 结构：`_indirect_lib` 对 bully / bystander_b 仍指向操控族（与情景无关，
+             门控没被 P0-A 的窗口化改写顺手削掉）；
+          ② 可达：霸凌者（s4/s6 预设 cast）与人设真读成幕后操控的从众旁观者
+             （自定义参与者/自建情景 cast 写「背后传话、爱使眼色」）都必须
+             **实际渲染出**带操控标记的句子。
+        """
+        # ① 结构：两个角色的操控族都在，且条数够切窗口（P0-A 之后 12/12）
+        for role in ("bully", "bystander_b"):
+            for bucket in ("low", "high"):
+                lines, tails, openers = L._indirect_lib(bucket, role)
+                self.assertEqual(lines, L._PERSONA_INDIRECT_LINES[bucket],
+                                 f"{role} 的借手族被换掉了")
+                self.assertGreaterEqual(len(tails), L._MIN_FIRM_SEGMENTS * 2,
+                                        f"{role}/{bucket} 操控族收尾不足，会话内会回绕")
+        # ②a 霸凌者渲染
+        for si in (4, 6):
+            sc = self.scenarios[si - 1]
+            persona = _cast_persona(sc, "bully")
+            if L.classify_persona(persona)[1] != "indirect":
+                continue
+            ctx = _ctx(sc, "bully", persona, 2)
+            hits = 0
+            for tendency in ("provoke", "low_intensity_taunt", "escalate_severe", "apologize"):
+                for idx in range(6):
+                    text = L.render_tendency_variant(tendency, 2, idx, ctx, "bully")
+                    hits += bool(_covert_hits(text))
+            self.assertGreater(hits, 0, f"s{si} 霸凌者借手族被削弱")
+        # ②b 从众旁观者：预设 cast 现在落 soft（P0-B），所以用「幕后操控型」人设走
+        #     自定义参与者/自建情景那条真实可达路径来验渲染可达性
+        sc = self.scenarios[1]
+        self.assertEqual(L.classify_persona(_cast_persona(sc, "bystander_b"))[1], "soft",
+                         "P0-B 之后 s2/bystander_b 应落 soft（起哄/附和不是幕后手法）")
+        ctx = _ctx(sc, "bystander_b", _INDIRECT_B_PERSONA, 2)
+        self.assertEqual(ctx.get("_stance"), "indirect", "操控型从众人设必须落 indirect")
+        b_hits = 0
+        for tendency in ("follow_majority", "avoid", "wait_observe", "hesitate"):
+            for idx in range(6):
+                text = L.render_tendency_variant(tendency, 2, idx, ctx, "bystander_b")
+                self.assertTrue(text.strip(), "bystander_b 渲染为空")
+                b_hits += bool(_covert_hits(text))
+        self.assertGreater(b_hits, 0, "从众旁观者借手族被削弱")
+
+    def test_h3_victim_indirect_takes_firm_library_never_covert(self):
+        """任务#60-3（PM 裁定 3）：受害者 + stance=indirect 一律不得产出幕后递话/
+        撇清族——那类句子是施轧者的工具。实现口径 = 台词选取走现有 firm（不示弱）库，
+        与 bystander_a 的 mediate 门控同一入口（`_INDIRECT_FAMILY_BY_ROLE`），
+        **不新建第四个句库**。代价（受害者「当面不说、背后记仇」被丢成「不示弱」）
+        已在 llm_client 的 `_INDIRECT_FAMILY_BY_ROLE` 注释里写死。
+
+        断言顺序与 `test_h1` 一致，先证明标记表能覆盖操控族全部模板（否则「0 命中」
+        是空断言），再穷举 victim × 26 倾向 × L1–L5 × 序号 0–2 取实际产出。"""
+        # 1) 完备性：操控族 18 条模板每条都含标记词
+        covered, total = 0, 0
+        for bucket in ("low", "high"):
+            for t in list(L._PERSONA_INDIRECT_LINES[bucket]) + list(L._PERSONA_INDIRECT_TAILS[bucket]):
+                total += 1
+                covered += bool(_covert_hits(t))
+        self.assertEqual(covered, total, f"标记表没覆盖满操控族：{covered}/{total}")
+        # 2) victim 实际取到的库（firm 库）本身 0 条操控句，且不是操控库
+        for bucket in ("low", "high"):
+            v_lines, v_tails, v_openers = L._stance_lib("indirect", bucket, "victim")
+            self.assertEqual((v_lines, v_tails, v_openers),
+                             (L._PERSONA_FIRM_LINES[bucket], L._PERSONA_FIRM_TAILS[bucket],
+                              L._PERSONA_FIRM_OPENERS),
+                             f"victim/indirect 没有落到现有 firm 库（{bucket}）")
+            for t in v_lines + v_tails:
+                self.assertEqual(_covert_hits(t), [], f"victim 库句混入操控句：{t}")
+            for t in v_tails:
+                self.assertTrue(L._has_scene_anchor(t), f"victim 库收尾缺情景锚点：{t}")
+        # 3) 门控表没有顺手改掉别的角色（bystander_a=mediate、霸凌者/从众=操控族）
+        self.assertEqual(L._INDIRECT_FAMILY_BY_ROLE,
+                         {"bystander_a": "mediate", "victim": "firm"})
+        self.assertEqual(L._indirect_lib("low", "bully")[0], L._PERSONA_INDIRECT_LINES["low"])
+        self.assertEqual(L._indirect_lib("low", "bystander_b")[0],
+                         L._PERSONA_INDIRECT_LINES["low"])
+        self.assertEqual(L._indirect_lib("low", "bystander_a")[0],
+                         L._INDIRECT_MEDIATE_LINES["low"])
+
+        # 4) 穷举实测：victim × 26 倾向 × L1–L5 × 序号 0–2
+        sc = self.scenarios[0]
+        cells, v_hits, v_min_pool = 0, [], None
+        for tendency in self.tendencies:
+            for level in (1, 2, 3, 4, 5):
+                ctx = _ctx(sc, "victim", _INDIRECT_V_PERSONA, level)
+                self.assertEqual(ctx.get("_stance"), "indirect", "注入人设必须落 indirect")
+                size = L.tendency_pool_size(tendency, level, "victim", ctx)
+                v_min_pool = size if v_min_pool is None else min(v_min_pool, size)
+                for idx in range(3):
+                    text = L.render_tendency_variant(tendency, level, idx, ctx, "victim")
+                    cells += 1
+                    self.assertTrue(text.strip(), f"victim/{tendency}@L{level}#{idx} 空文本")
+                    self.assertGreaterEqual(net_len(text), 20,
+                                            f"victim/{tendency}@L{level}#{idx} 净字数跌破 20：{text}")
+                    hits = _covert_hits(text)
+                    if hits:
+                        v_hits.append(f"{tendency}@L{level}#{idx} {hits} ⇒ {text[:60]}")
+        self.assertEqual(cells, 26 * 5 * 3, "穷举格数不符，断言范围被缩小")
+        self.assertEqual(v_hits, [], f"受害者产出幕后递话/撇清族：{v_hits[:4]}")
+        # 5) 池深：换库不能把受害者池压到会话跨度以下（#54-7 / PM 定的最小池 ≥ 40）
+        self.assertGreaterEqual(v_min_pool, SESSION_SPAN,
+                                f"victim indirect 最小池 {v_min_pool} < 跨度 {SESSION_SPAN}")
+
+    # ---------- 不变量：26 键、每轮 3 人、非空文本、契约5 净字数 ----------
+    def test_g1_26_key_tables_nonempty_and_length(self):
+        """不变量：26 键三表不增删改名；任何格子不产出空文本；净字数沿用项目
+        既有口径（单条 ≥20、按角色均值 ≥35，见本文件契约5 的两处断言），
+        不引入新口径去「制造」回退。"""
+        self.assertEqual(len(TENDENCY_INSTRUCTIONS), 26)
+        self.assertEqual(len(TENDENCY_LABEL_CN), 26)
+        self.assertEqual(set(TENDENCY_INSTRUCTIONS), set(TENDENCY_LABEL_CN))
+        self.assertEqual(set(TENDENCY_RESPONSES), set(TENDENCY_INSTRUCTIONS))
+        sc = self.scenarios[7]
+        per_role = {}
+        for role in ROLES:
+            persona = _cast_persona(sc, role)
+            lens = []
+            for tendency in self.tendencies:
+                for level in (1, 3, 5):
+                    ctx = _ctx(sc, role, persona, level)
+                    for idx in (0, 1, 2, 3, 4, 5):
+                        text = L.render_tendency_variant(tendency, level, idx, ctx, role)
+                        self.assertTrue(text.strip(), f"{role}/{tendency}@L{level}#{idx} 空文本")
+                        n = net_len(text)
+                        lens.append(n)
+                        self.assertGreaterEqual(n, 20,
+                                                f"{role}/{tendency}@L{level}#{idx} 净字数跌破 20：{text}")
+            per_role[role] = sum(lens) / len(lens)
+        for role, mean in per_role.items():
+            self.assertGreaterEqual(mean, 35, f"{role} 离线均长回退：{mean:.1f}")
+
+
+class Rework64MergeTests(unittest.TestCase):
+    """任务#64 合并返工批次的常驻断言（P0-A/B/C、P1-D/E、P2-F、M-1 + c3 连带洞）。
+
+    一项至少一条，命名前缀 = 项目代号；全部离线：只调 `llm_client` /
+    `thinking_filter` 的纯函数，用 ast 静态取 `web/app.py` 的 `_scenarios`，
+    不 import Flask、不起服务、不调真实 LLM、不读数据库。
+    改前/改后的**全量**数字在 `test_evidence/integration_check_20261115/rework_64/`
+    （q9 = 跨倾向同句对、q2 = 40 抽收尾去重、q12 = P0-C 两个口径、q14 = P0-B 判定表），
+    这里只留能在 CI 时间预算内跑的判据。
+    """
+
+    #: 一次会话里同一格最多取到多少个不同序号（`AUTO_END_CONFIG["max_rounds"]` 默认 40）
+    SPAN = SESSION_SPAN
+
+    @classmethod
+    def setUpClass(cls):
+        cls.scenarios = _load_scenarios()
+        cls.tendencies = sorted(TENDENCY_RESPONSES)
+        cls.personas = {}
+        for si, sc in enumerate(cls.scenarios):
+            for role in ROLES:
+                cls.personas[(si, role)] = _cast_persona(sc, role)
+
+    # ── 小工具（口径与 rework_64 探针逐字一致，避免测试与取证两套算法）──
+    @staticmethod
+    def _body(text):
+        return re.sub(r"[（(][^（()）]*[）)]", "", text or "").strip()
+
+    @staticmethod
+    def _split_tail(text):
+        """逐字照抄 review_61/probes/r61_p10_tails.py:41-46（F1 的收尾切法）。"""
+        t = re.sub(r"（[^）]*）", "", text or "").strip()
+        parts = [p.strip() for p in re.split(r"(?<=[。！？…])", t) if p.strip()]
+        return parts[-1] if parts else ""
+
+    def _ctx_for(self, si, role, level):
+        return _ctx(self.scenarios[si], role, self.personas[(si, role)], level)
+
+    # ---------- P0-A：成员级差异化 / 收尾供给 ----------
+    def test_p0a1_no_two_tendencies_can_emit_the_same_sentence(self):
+        """P0-A 验收①（PM 更正一：「新增对必须回 0」）。
+
+        口径：**跨倾向同句** = 同一情景、同一角色、同一档位下，两个不同倾向在
+        同一序号跨度内渲染出**剥掉动作括注后逐字相同**的正文。这是用户当场看到的
+        「换个人说同一句话」，也是审查#61/复验#62 的 `cells/pairs/types` 三个数。
+        样本：8 情景 × 4 角色 × L1–L3 × 26 倾向 × 序号 0–5（≈ 1.5 万次渲染，
+        全量网格见 q9：改前 70 格/6,440 对/14 类型 → 改后 0/0/0）。
+        另外单点名对必须回 0：`endure_quietly|withdraw`、`respond_cautious|withdraw`、
+        `low_intensity_taunt|silence_fear`（这三对是#62 复验新增的）。
+        """
+        named = {("endure_quietly", "withdraw"), ("respond_cautious", "withdraw"),
+                 ("low_intensity_taunt", "silence_fear")}
+        dup_pairs, named_hits = set(), []
+        for si in range(len(self.scenarios)):
+            for role in ROLES:
+                for level in (1, 2, 3):
+                    got = {}
+                    for t in self.tendencies:
+                        ctx = self._ctx_for(si, role, level)
+                        bodies = {self._body(L.render_tendency_variant(t, level, i, ctx, role))
+                                  for i in range(6)}
+                        got[t] = {b for b in bodies if b}
+                    keys = sorted(got)
+                    for a in range(len(keys)):
+                        for b in range(a + 1, len(keys)):
+                            shared = got[keys[a]] & got[keys[b]]
+                            if shared:
+                                pair = (keys[a], keys[b])
+                                dup_pairs.add(pair)
+                                if pair in named:
+                                    named_hits.append((si + 1, role, level, shared.pop()[:34]))
+        self.assertEqual(named_hits, [], f"点名的三个新增对又出现了：{named_hits[:3]}")
+        self.assertEqual(sorted(dup_pairs)[:6], [],
+                         f"{len(dup_pairs)} 对倾向在同格出同句：{sorted(dup_pairs)[:6]}")
+
+    def test_p0a2_session_tail_dedup_at_least_12(self):
+        """P0-A 验收②（PM 裁定 B-1 的一半：一次会话内收尾去重 ≥12）。
+
+        口径逐字照抄 review_61 的 F1 模拟：40 轮、`rnd % len(倾向表)`、
+        陈浩/「你再说一遍试试」、只用 `description` 建 context、`split_tail` 先剥
+        括注再按 `(?<=[。！？…])` 取末句。受害者/霸凌者用 r61 点名的固定倾向表，
+        两个旁观者用 26 键全表（这条是 sweep 扩展，与 q2 的 `--sweep` 同一口径）。
+        改前实测：8×4×5 全网格 min=5、mean 6.9；改后 min=12。
+        """
+        victim_tends = ["silence_fear", "withdraw_cry", "withdraw", "weak_protest",
+                        "seek_help", "silent_resist", "endure_quietly", "retaliate_back"]
+        bully_tends = ["provoke", "low_intensity_taunt", "escalate_severe", "avoid"]
+        worst, worst_where = None, ""
+        checked = 0
+        for si in range(len(self.scenarios)):
+            for role in ROLES:
+                tends = ([t for t in bully_tends if t in TENDENCY_RESPONSES] if role == "bully"
+                         else [t for t in victim_tends if t in TENDENCY_RESPONSES]
+                         if role == "victim" else self.tendencies)
+                for level in (1, 2, 3, 4, 5):
+                    ctx = self._ctx_for(si, role, level)
+                    used, tails = {}, []
+                    for rnd in range(40):
+                        t = tends[rnd % len(tends)]
+                        idx = pick_variant_index(t, level, used.get(t, []), role, ctx)
+                        used.setdefault(t, []).append(idx)
+                        tails.append(self._split_tail(
+                            render_tendency_variant(t, level, idx, ctx, role)))
+                    distinct = len({x for x in tails if x})
+                    checked += 1
+                    if worst is None or distinct < worst:
+                        worst, worst_where = distinct, f"s{si+1}/{role}@L{level}"
+                    self.assertGreaterEqual(
+                        distinct, 12, f"{worst_where} 40 抽只去重出 {distinct} 条收尾")
+        self.assertEqual(checked, len(self.scenarios) * len(ROLES) * 5)
+
+    def test_p0a3_library_windows_are_disjoint_per_group(self):
+        """P0-A 结构断言：库按倾向切的是**互不相交**的窗口，不是只换起点。
+
+        `_rotate` 只换起点不换成员 ⇒ 旧实现的「按倾向轮转」在成员层面完全相同，
+        这正是复验#62 里「P0-A 未动」的那一项。现在组号 = 26 键排序序号 % 组数，
+        组数 = `len(lib) // 窗口`，所以：
+          ① 不同组号的窗口两两不相交；② 每个窗口正好 `窗口` 条；
+          ③ 组数 > 1（文案少到切不出两组就等于没做成员级差异化）。
+        """
+        win = L._MIN_FIRM_SEGMENTS
+        libs = []
+        for stance in ("firm", "indirect"):
+            for role in ROLES:
+                for bucket in ("low", "high"):
+                    libs.append(("%s/%s/%s" % (stance, role, bucket), L._stance_lib(stance, bucket, role)))
+        # soft 只补了收尾库（台词段仍走 26 键原池），故只查条数不查窗口
+        self.assertGreaterEqual(len(L._PERSONA_SOFT_TAILS), 2 * L._MIN_FIRM_SEGMENTS,
+                                "soft 收尾库少于两组的量，会话内去重撑不到 12")
+        for where, (lines, tails, openers) in libs:
+            for seg_name, seq in (("lines", lines), ("openers", openers)):
+                groups = max(1, len(seq) // win)
+                self.assertGreater(groups, 1,
+                                   f"{where}/{seg_name} 只有 {len(seq)} 条，切不出多组窗口")
+                wins = {}
+                for t in self.tendencies:
+                    w = L._tendency_window(seq, t)
+                    self.assertEqual(len(w), win, f"{where}/{seg_name} 窗口不是 {win} 条")
+                    wins.setdefault(L._tendency_index(t) % groups, set()).update(w)
+                keys = sorted(wins)
+                for a in range(len(keys)):
+                    for b in range(a + 1, len(keys)):
+                        self.assertEqual(wins[keys[a]] & wins[keys[b]], set(),
+                                         f"{where}/{seg_name} 组 {keys[a]} 与 {keys[b]} 窗口相交")
+                self.assertEqual(len(set().union(*wins.values())), groups * win,
+                                 f"{where}/{seg_name} 窗口成员有重复")
+
+    def test_p0a4_thin_bucket_never_falls_back_to_whole_library(self):
+        """P0-A `no_leak`：补不满下限时**不许**回落整库。
+
+        旧实现 `_top_up(..., filler=旋转后的整库)` 在差 1 条时把整库倒进来，
+        成员级差异化被这条泄漏路径抵消（评测 W1 的 35 格 ⇒ 复验#62 报「P0-A 未动」）。
+        现在一句话只可能来自三个地方：本档原池过闸句、本倾向兄弟档、**本倾向库窗口**；
+        落在「库内但不在本倾向窗口」的句子数量必须恒为 0。
+        """
+        win_only = 0
+        for si in range(len(self.scenarios)):
+            for role in ROLES:
+                stance = L.classify_persona(self.personas[(si, role)])[1]
+                if stance not in ("firm", "indirect"):
+                    continue
+                for t in self.tendencies:
+                    for level in (1, 2, 3, 4, 5):
+                        entry, bucket = L._pool_and_bucket(t, level, role)
+                        lib_lines = list(L._stance_lib(
+                            stance, "high" if bucket == "high" else "low", role)[0])
+                        if not lib_lines:
+                            continue
+                        ctx = self._ctx_for(si, role, level)
+                        _o, lines, _t = L._segments(entry, bucket, ctx, role, t)
+                        orig = set(entry.get(bucket) or [])
+                        sib = set(entry.get("high" if bucket == "low" else "low") or [])
+                        outside = [x for x in lines if x not in orig | set(lib_lines) | sib]
+                        self.assertEqual(outside, [],
+                                         f"s{si+1}/{role}/{t}@L{level} 补底混进池外句子")
+                        win = set(L._tendency_window(lib_lines, t))
+                        leak = [x for x in lines if x in set(lib_lines) - win]
+                        self.assertEqual(leak, [],
+                                         f"s{si+1}/{role}/{t}@L{level} 补底用了**本倾向窗口之外**"
+                                         f"的库句 {len(leak)} 条 ⇒ 泄漏回整库了")
+                        if win & set(lines):
+                            win_only += 1
+        self.assertGreater(win_only, 0, "没有一格用到库窗口，断言面为空")
+
+    def test_p0a5_min_pool_over_session_span(self):
+        """P0-A 附带守住 #54-7：立场驱动格的**最小池必须 > 同格取号跨度**。
+
+        改前（#62 复验）现网最小池 6（`endure_quietly` 整档被筛空 + 台词/收尾同带
+        `{obj}` 被 `_echo_grade` 判硬重复），40 轮会话必然回绕成逐字复读。
+        现在 8 情景 × 4 角色 × 26 倾向 × L1–L5 全网格 min ≥ 40。
+        """
+        min_pool, where = None, ""
+        for si in range(len(self.scenarios)):
+            for role in ROLES:
+                for t in self.tendencies:
+                    for level in (1, 2, 3, 4, 5):
+                        ctx = self._ctx_for(si, role, level)
+                        size = tendency_pool_size(t, level, role, ctx)
+                        if min_pool is None or size < min_pool:
+                            min_pool, where = size, f"s{si+1}/{role}/{t}@L{level}"
+                        self.assertGreater(size, 0, f"{where} 池为空")
+        self.assertGreaterEqual(min_pool, self.SPAN, f"最小池 {min_pool}（{where}）< 跨度 {self.SPAN}")
+
+    # ---------- P0-B ----------
+    def test_p0b1_indirect_overfire_words_no_longer_flip_stance(self):
+        """P0-B（审查#61 F3）：六个词的极性判定必须固定，且 32 格的 indirect 只剩两格。
+
+        「怕被孤立」是**受害处境**、「背后替她说话」是暗中**相助**、「不起哄」是
+        否定式、「看热闹/事不关己/爱看热闹」是随大流的弱立场——都不是幕后施害手法。
+        逐词判定表（199 词）与 32 格集合的改前/改后取证：`out/q14_p0b_diff.json`
+        （改 6 词、改 2 格：s2/bystander_b、s5/bystander_b indirect → soft）。
+        """
+        for w, want in (("怕被孤立", "soft"), ("看热闹", "soft"), ("爱看热闹", "soft"),
+                        ("事不关己", "soft"), ("不起哄", "neutral"), ("背后替她说话", "neutral")):
+            self.assertEqual(L._word_stance(w), want, w)
+        # 施害手法词族不许被守卫连带削掉（`test_a2` 只查 6 个霸凌者词，这里补守卫边界）
+        for w in ("背后操控", "冷暴力", "嚼舌根", "孤立别人", "排挤人", "递话", "敲打",
+                  "拉帮结派", "使眼色", "阴阳怪气", "起哄", "煽风"):
+            self.assertEqual(L._word_stance(w), "indirect", w)
+        # 「看热闹/事不关己」已经从幕后词族搬进 soft 词族
+        self.assertNotIn("看热闹", L._INDIRECT_MARKS)
+        self.assertNotIn("事不关己", L._INDIRECT_MARKS)
+        self.assertIn("看热闹", L._SOFT_MARKS)
+        # 32 格：只有两个霸凌者格仍是 indirect
+        grid = {}
+        for si, sc in enumerate(self.scenarios, 1):
+            for role in ROLES:
+                grid["s%d/%s" % (si, role)] = L.classify_persona(_cast_persona(sc, role))[1]
+        self.assertEqual(sorted(k for k, v in grid.items() if v == "indirect"),
+                         ["s4/bully", "s6/bully"], grid)
+        self.assertEqual(grid["s2/bystander_b"], "soft")
+        self.assertEqual(grid["s5/bystander_b"], "soft")
+
+    def test_p0b2_soft_cells_still_carry_scene_anchor(self):
+        """P0-B 的连带洞（本批新发现，`test_c3` 的成因）：soft 立场原来**没有一条
+        带锚点的收尾**，于是同格在 8 个情景下正文逐字相同。
+
+        改前看不出来是因为 s2/s5 的从众旁观者被误判 indirect、走了 firm/indirect 的
+        锚点收尾合并；P0-B 把它落回 soft 之后 8/8 撞满（全量：`probes/q17_c3_scope.py`
+        改前 0 格 / 改后 102 格逐字相同，全部 soft）。修法是给 soft 同一套
+        「原池锚点收尾在前 + 库收尾整体轮转在后」，库句必须逐条带 `{obj}`。
+        """
+        for t in L._PERSONA_SOFT_TAILS:
+            self.assertTrue(L._has_scene_anchor(t), f"soft 收尾缺情景锚点：{t}")
+            self.assertEqual(t.count("{obj}"), 1, "收尾里的锚点槽位必须恰好一个：" + t)
+        flat = []
+        for role in ("bystander_b", "victim"):
+            for t in ("follow_majority", "observe_quiet", "wait_observe", "avoid"):
+                if t not in TENDENCY_RESPONSES:
+                    continue
+                for idx in range(4):
+                    bodies = [self._body(render_tendency_variant(
+                        t, 2, idx, self._ctx_for(si, role, 2), role))
+                        for si in range(len(self.scenarios))]
+                    if len({b for b in bodies if b}) == 1:
+                        flat.append(f"{role}/{t}#{idx}")
+        self.assertEqual(flat, [], f"{len(flat)} 格 8 情景正文仍逐字相同：{flat[:6]}")
+        # 收尾去重也要覆盖 soft：40 抽里至少 12 条不同收尾（与 `test_p0a2` 同口径）
+        ctx = self._ctx_for(1, "bystander_b", 2)
+        self.assertEqual(ctx.get("_stance"), "soft", "s2/bystander_b 必须是 soft 才算守住本项")
+        tails = [self._split_tail(render_tendency_variant(
+            self.tendencies[i % len(self.tendencies)], 2, i, ctx, "bystander_b"))
+            for i in range(40)]
+        self.assertGreaterEqual(len({x for x in tails if x}), 12,
+                                f"soft 格 40 抽只去重 {len({x for x in tails if x})} 条收尾")
+
+    # ---------- P0-C ----------
+    #: #62 那 60 条 s6 霸凌者真实台词里被判 X/Y/Z 的 9 个正文（剥掉动作括注、`{obj}`
+    #: 已填成「那个座位」）。语料与判定脚本口径见
+    #: `test_evidence/integration_check_20261115/acceptance_62/a62_item2_classify.py`，
+    #: 回溯与两个口径的复跑见 `rework_64/probes/q12_p0c_s6_replay.py`。
+    P0C_WIDE_AUDIT = (
+        "你从头到脚都透着那股寒酸劲儿，装什么大方。……那个座位你别往我心里去，我什么都没说过。",
+        "你从头到脚都透着那股寒酸劲儿，装什么大方。谁在背后讲的不重要，那个座位你自己知道就行。",
+        "你从头到脚都透着那股寒酸劲儿，装什么大方。这事我不管，那个座位你怎么接是你的事。",
+        "你从头到脚都透着那股寒酸劲儿，装什么大方。那个座位我不当众讲，回头有人跟你提，你别说是我。",
+        "还在琢磨那个？行，真有毅力，就是没什么用。……那个座位你别往我心里去，我什么都没说过。",
+        "还在琢磨那个？行，真有毅力，就是没什么用。别当真啊，我随口一说你倒当个事办，那个座位有那么重要？",
+        "还在琢磨那个？行，真有毅力，就是没什么用。谁在背后讲的不重要，那个座位你自己知道就行。",
+        "还在琢磨那个？行，真有毅力，就是没什么用。这事我不管，那个座位你怎么接是你的事。",
+        "还在琢磨那个？行，真有毅力，就是没什么用。那个座位我不当众讲，回头有人跟你提，你别说是我。",
+    )
+    #: 上面 9 条正文里越线的**台词段模板**（池成员，`{obj}` 只在收尾，故不在此列）
+    P0C_POOL_LINES = ("你从头到脚都透着那股寒酸劲儿，装什么大方。",
+                      "还在琢磨那个？行，真有毅力，就是没什么用。")
+
+    def test_p0c1_wide_audit_lines_are_gated_by_production_predicate(self):
+        """P0-C 的根因是**两套口径**：#62 用宽口径正则判越线，生产侧只用
+        `_is_direct_confront_speech` 筛句 ⇒ 「评审判越线、生产判没问题」的句子留在
+        indirect 池里，`test_a4` 于是成了自洽但空的断言。
+
+        这条断言把两个口径钉在一起：**宽口径判 X/Y/Z 的句子，生产谓词必须也判越线**。
+        复跑数字（`out/q12_p0c_s6_replay.json`）：会话命中率 改前 26/60 → 改后 0/60
+        （PM 目标 ≤3/60）；池暴露度 改前 3/30 成员（10%）→ 改后 0/28。
+        """
+        for body in self.P0C_WIDE_AUDIT:
+            self.assertTrue(L._is_direct_confront_speech(body),
+                            f"宽口径判越线、生产谓词放行：{body[:30]}")
+        for line in self.P0C_POOL_LINES:
+            self.assertTrue(L._is_direct_confront_speech(line), line)
+        # 越线成员必须真的不在 s6 霸凌者（indirect）任何一格的台词段里
+        sc = self.scenarios[5]
+        persona = _cast_persona(sc, "bully")
+        self.assertEqual(L.classify_persona(persona)[1], "indirect")
+        leaked = []
+        for t in self.tendencies:
+            for level in (1, 2, 3, 4, 5):
+                entry, bucket = L._pool_and_bucket(t, level, "bully")
+                _o, lines, tails = L._segments(entry, bucket, _ctx(sc, "bully", persona, level),
+                                               "bully", t)
+                for x in list(lines) + list(tails):
+                    if any(w in x for w in self.P0C_POOL_LINES):
+                        leaked.append(f"{t}@L{level}:{x[:24]}")
+        self.assertEqual(leaked, [], f"越线句子仍在 s6 霸凌者池里：{leaked[:4]}")
+
+    def test_p0c2_two_explicit_narrowings_are_kept(self):
+        """扩表的两处**刻意收窄**也要钉住，否则下次有人顺手把词表补全就会误杀。
+
+        · 「好笑」不单独收：`我可不觉得好笑` 是**拒绝跟着嘲笑**（resist_follow 的正确
+          行为），收进来会被 indirect 门禁筛掉；
+        · 「听见了 / 都听见了」都不收（宽口径收的是裸「听见了」）：池里带这三个字的
+          句子有一半是**被压的人在说话**——`我一字一句都听见了，只是不照着你们的调子答`
+          是硬气受害者、`他刚才讲的不是假话，你们也都听见了` 是打圆场。借人数压人
+          那一类由「大家伙儿都」承接。
+        """
+        self.assertFalse(L._is_direct_confront_speech("我可不觉得好笑。"))
+        self.assertFalse(L._is_direct_confront_speech("我一字一句都听见了，只是不照着你们的调子答。"))
+        self.assertFalse(L._is_direct_confront_speech(
+            "这事我当面说一句：他刚才讲的不是假话，你们也都听见了。"))
+        self.assertTrue(L._is_direct_confront_speech(
+            "别用那种眼神看我，{obj}到底怎么回事，大家伙儿都听见了。"))
+
+    # ---------- P1-D ----------
+    def test_p1d_reply_slot_never_takes_stage_direction(self):
+        """P1-D：`{reply}` 取「上一条发言的具体抓手」时不许抽舞台提示括注。
+
+        旧 `_keyword_from` 把 `（）` 也当分隔符、排序键只有长度 ⇒ 「带括注的消息里
+        最长括注 > 最长台词小句」实测 3,913/4,858 = 80.6%（#63 第 4.2 节），
+        969 会话/10,614 条消息回放里 17.44% 的 `{reply}` 引的是动作描写。
+        只改运行时槽位取值，不碰池成员与顺序（#54-7）。
+        """
+        cases = [
+            ("（嬉皮笑脸地晃过来）龙飞，你今天别想走。", "你今天别想走"),
+            ("（把书扔到一边）这道题我讲过三遍了。", "这道题我讲过三遍了"),
+            ("（低着头，往后退了半步）", ""),
+            ("你先把手里的东西放下。", "你先把手里的东西放下"),
+        ]
+        for raw, want in cases:
+            got = L._keyword_from(raw)
+            self.assertNotIn("（", got, f"槽位里还有括注：{raw} → {got}")
+            if want:
+                self.assertEqual(got, want, raw)
+        # 真实池动作括注全部不得成为 `{reply}`
+        for t, entry in TENDENCY_RESPONSES.items():
+            for op in (entry.get("openers") or []):
+                inner = re.sub(r"[（()）]", "", op).replace("{sw}", "").strip("，, ")
+                if len(inner) < 2:
+                    continue
+                got = L._keyword_from(op + "这事你说了不算。")
+                self.assertNotEqual(got, inner, f"{t} 的括注被当成抓手：{inner}")
+
+    # ---------- P1-E ----------
+    def test_p1e_nine_real_soft_sentences_are_gated(self):
+        """P1-E（审查#61 F2）：#63 第 4.1 节人工剔出的 **9 句真示弱**必须被生产谓词判出。
+
+        改前这 9 条「语义口径判得出、生产谓词判不出」，48 条残留全落在 s8 硬气受害者
+        的 `withdraw@L3/L4/L5`（每格 40 个序号命中 16 次）。补词后这些句子在
+        firm/indirect 格里被 `_ok` 筛掉、由兄弟档/本倾向窗口补底，**不是回填**。
+        """
+        nine = ("我不要了", "都给你们", "别再说了", "别说我了", "难受", "更糟",
+                "不想辩", "请你别", "不喜欢被这样讲")
+        for w in nine:
+            self.assertIn(w, L._SOFT_SPEECH_MARKS, w)
+        samples = ("{obj}我不要了，都给你们。", "别再说了，我听着就行。",
+                   "别说我了，我心里难受。", "这样只会更糟。", "我不想辩什么。",
+                   "请你别这样讲。", "我不喜欢被这样讲。")
+        for s in samples:
+            self.assertTrue(L._is_soft_speech(s), s)
+        # s8 硬气受害者：跨度内 0 条示弱（与 test_b1/test_b2 同一判据、不同覆盖面）
+        sc = self.scenarios[7]
+        persona = _cast_persona(sc, "victim")
+        hits = []
+        for t in self.tendencies:
+            for level in (1, 2, 3, 4, 5):
+                ctx = _ctx(sc, "victim", persona, level)
+                size = tendency_pool_size(t, level, "victim", ctx)
+                for idx in range(min(self.SPAN, size)):
+                    body = self._body(render_tendency_variant(t, level, idx, ctx, "victim"))
+                    if L._is_soft_speech(body):
+                        hits.append(f"{t}@L{level}#{idx}:{body[:24]}")
+        self.assertEqual(hits[:6], [], f"s8 硬气受害者跨度内仍有示弱句 {len(hits)} 处：{hits[:6]}")
+
+    # ---------- P2-F ----------
+    def test_p2f_unknown_role_falls_back_to_mediate_not_covert(self):
+        """P2-F：`_indirect_lib` 对**白名单外**的角色必须落 mediate，不许靠
+        「不在 `by_role` 表里就默认操控族」把新角色（自定义角色类型）演成递话撇清。
+
+        改前 `family = by_role.get(agent_id, "covert")` 是**默认放行**：只要人设判成
+        indirect，任何未知 agent_id 都借到幕后操控族。现在默认族 = mediate，
+        只有显式列进 `_COVERT_FAMILY_ROLES` 的角色（霸凌者/从众旁观者）才拿操控族。
+        """
+        self.assertEqual(tuple(L._COVERT_FAMILY_ROLES), ("bully", "bystander_b"))
+        for fake in ("", "bystander_c", "custom_de7a4eca", "teacher", "BULLY"):
+            for bucket in ("low", "high"):
+                lines, tails, openers = L._indirect_lib(bucket, fake)
+                self.assertEqual(lines, L._INDIRECT_MEDIATE_LINES[bucket],
+                                 f"{fake or '(空)'} 拿到了操控族台词")
+                self.assertEqual(tails, L._INDIRECT_MEDIATE_TAILS[bucket],
+                                 f"{fake or '(空)'} 拿到了操控族收尾")
+                for x in list(lines) + list(tails):
+                    self.assertEqual(_covert_hits(x), [], f"{fake} 族混入操控句：{x[:26]}")
+        # 白名单内仍是操控族（P2-F 不许把 #60-2 的修复改没）
+        for role in L._COVERT_FAMILY_ROLES:
+            self.assertEqual(L._indirect_lib("low", role)[0], L._PERSONA_INDIRECT_LINES["low"])
+        # 显式表优先于白名单推断
+        self.assertEqual(L._INDIRECT_FAMILY_BY_ROLE["bystander_a"], "mediate")
+        self.assertEqual(L._indirect_lib("low", "victim")[0], L._PERSONA_FIRM_LINES["low"])
+
+    # ---------- M-1 ----------
+    def test_m1_compound_report_verb_own_speech_not_dropped(self):
+        """M-1（审查#61 F4）：`姓名 + 双音节动词` 的本人第三人称自述不许被整条降级。
+
+        上一版把动词写成 `(?:说|道|答|问)`，捕获组 `{1,4}?` 会**吞掉第一个动词**
+        （`思远说道：` 捕获到 `思远说`），于是「段首姓名==本人 ⇒ 放行」这条分支
+        从来没有成立过，6 个姓名 × 3 个双音节动词 = 18 个合法组合在单段路径被丢弃
+        （`prompts.py:223` 要求单段成文 ⇒ 返回 '' ⇒ supervisor 整条降级到预设）。
+        本条穷举这 18 个组合，并守住三条边界：他人转述仍拦、第三人称代词头仍拦、
+        对话人称代词头（你/我）放行。全量 NEW_DROP 误杀复跑见
+        `probes/q10_m1_other_report.py`（改前 18 例误杀 → 改后 0）。
+        """
+        import multi_agent.thinking_filter as TF
+        names = ("思远", "陈浩", "龙飞", "林小满", "马超", "韩雪")
+        verbs = ("说道", "问道", "答道", "叫道", "喊道", "笑道", "说", "问", "答", "喊")
+        modifiers = ("", "小声", "冷冷", "连忙", "点头")
+        for name in names:
+            for verb in verbs:
+                for mod in modifiers:
+                    p = f"{name}{mod}{verb}：我今天不挪地方。"
+                    m = TF._OTHER_REPORT.match(p)
+                    self.assertIsNotNone(m, p)
+                    self.assertEqual(m.group(1), name, f"{p} 捕获到 {m.group(1)!r} ⇒ 动词被吞")
+                    self.assertTrue(TF._is_own_speech_paragraph(p, name), p)
+                    self.assertEqual(TF.extract_dialogue_only(p, name), p,
+                                     f"{p} 仍被整条降级（NEW_DROP 回归）")
+                    if name != "陈浩":
+                        self.assertFalse(TF._is_own_speech_paragraph(p, "陈浩"),
+                                         f"{p} 他人转述被放行")
+        # 副词表是**显式枚举**（`思远点了头说道：` 这种非枚举形式匹配不到谓词，
+        # 于是按普通台词段走 `_has_audible_speech`，同样不会被当成他人转述丢掉）。
+        self.assertFalse(TF._OTHER_REPORT.match("思远点了头说道：我今天不挪地方。"))
+        self.assertEqual(TF.extract_dialogue_only("思远点了头说道：我今天不挪地方。", "思远"),
+                         "思远点了头说道：我今天不挪地方。")
+        # 代词头：当前角色在跟对面说话 / 第一人称自述，不是第三者转述
+        for p in ("你说：你到底想怎么样。", "我说：我不挪地方。", "咱们说：这事到此为止。"):
+            self.assertTrue(TF._is_own_speech_paragraph(p, "思远"), p)
+        # 但代词头仍然要过「有可听话音」这一关，纯括注照样拦
+        self.assertFalse(TF._is_own_speech_paragraph("他说：", "思远"))
+        self.assertFalse(TF._is_own_speech_paragraph("她道：我不去。", "思远"))
+        self.assertEqual(TF.extract_dialogue_only("陈浩说：（转过身，没出声）", "思远"), "")
+
+
+class Rework71StanceAxisTests(unittest.TestCase):
+    """任务#71（F1 求助轴 + F2 场合轴）常驻断言，全部离线。
+
+    为什么这三类判据必须常驻而不是探针：
+      · F1 的失效在**真实会话**里表现为「强硬受害者当场答应去找老师」（s8 实测 5/30 明确
+        + 2/30 边缘，铁证 ebeb841b r11「我认栽，我跟你一块去张老师那儿」），而
+        `prompts.py` 里管「求助权威」的规则只有那一条、原先与立场无关 ⇒ 没有常驻断言，
+        下一次改尾块又会静默退回去；
+      · F2 的「不当面挑衅/场合」口径此前只有 rework_64 的 q19 探针（跑一次就没人再跑），
+        #65 交接时明确登记为「待补常驻」，本轮补上。
+
+    三条纪律：
+      ① neutral 与「人设不在场」路径**逐字不变**——锚点是下面两个常量（#71 开工前
+         `prompts.py` 里的原文，逐字节抄下来钉死），不是靠比对某次快照；
+      ② 判据是**行为**（该出现的出现、该消失的消失），长度只有独立的预算断言，
+         两者不许互相凑；
+      ③ 不许为了让本类变绿而改判定口径。
+    """
+
+    # ---- #71 开工前原文（回归锚点，改动前逐字保留、改动后 neutral 分支必须仍等于它）----
+    TEACHER_ORIGINAL = (
+        "- **当老师(张老师)在对话中对你说了一些话时，要根据老师的具体话语回应**：\n"
+        "  - 老师安慰你 → 可能倾诉、解释情况、或表达委屈\n"
+        "  - 老师问你情况 → 需要回答老师的问题，描述自己的处境\n"
+        "  - 老师为你说话 → 可能感到安全、敢于表达更多")
+    BULLY_SPOTLIGHT_ORIGINAL = (
+        "- **聚光灯效应**：当老师或同学当众反复点名受害者名字时，你可能借机加剧尴尬"
+        "（例如起哄围观、拿对方的反应取乐），让受害者更加无地自容；"
+        "具体怎么说是你当场自己决定的，不要套用固定句子")
+    OCCASION_MARK = "6. 你在意场合：人多、有老师在场的地方你不把话挑明"
+    # 当面挑衅类指令：indirect 立场的渲染件里一条都不许出现（q19 口径常驻化）
+    FACE_TO_FACE_MARKS = ("起哄围观", "你可能借机加剧尴尬", "让受害者更加无地自容",
+                          "当众反复点名受害者名字", "（不屑地笑）", "（翻了个白眼）")
+    # 每格 stance 分支相对 neutral 的净增上限（字节）：#49 单例预算 5% ≈ 350–385 B，
+    # 这里按**最紧的一格**再收一档，防止以后往 stance 分支里塞长段说明。
+    STANCE_GROWTH_BUDGET_BYTES = 220
+
+    @classmethod
+    def setUpClass(cls):
+        cls.scenarios = _load_scenarios()
+        rm = {"bully": {"name": "陈浩", "role": "bully", "role_name": "霸凌者"}}
+
+        def build(role, scenario, stance_override=None, decision=None, reaction_tendency=None):
+            sc = scenario or {}
+            role_map = {"victim": {"name": "思远", "role": "victim", "role_name": "受害者"},
+                        "bully": {"name": "陈浩", "role": "bully", "role_name": "霸凌者"},
+                        "bystander_a": {"name": "林雨桐", "role": "bystander_a", "role_name": "正义旁观者"},
+                        "bystander_b": {"name": "赵磊", "role": "bystander_b", "role_name": "从众旁观者"}}
+            cast = (sc.get("cast") or {}).get(role) or {}
+            if cast:
+                role_map[role] = dict(role_map[role], name=cast.get("name") or role_map[role]["name"],
+                                      personality=cast.get("personality") or {})
+            return PR.build_system_prompt(
+                role, sc.get("level", 2), "（甲：你又在这儿磨蹭。）", sc.get("title", "课间"),
+                sc.get("description", "明天要交作品"), role_map=role_map,
+                round_num=3, bullying_intensity=0.62, victim_distress=0.48,
+                decision=decision, reaction_tendency=reaction_tendency)
+
+        cls.build = staticmethod(build)
+        cls.stance = staticmethod(lambda sc, role: L.classify_persona(_cast_persona(sc, role))[1]
+                                  if (sc.get("cast") or {}).get(role) else "neutral")
+
+    # ---------- 锚点：neutral 分支就是原文，谁都不许顺手改 ----------
+    def test_n1_neutral_entries_are_the_verbatim_originals(self):
+        self.assertEqual(PR._VICTIM_TEACHER_TEXT["neutral"], self.TEACHER_ORIGINAL,
+                         "受害者「回应老师」块的 neutral 分支被改写（#71 回归锚点）")
+        self.assertEqual(PR._BULLY_SPOTLIGHT_TEXT["neutral"], self.BULLY_SPOTLIGHT_ORIGINAL,
+                         "霸凌者聚光灯句的 neutral 分支被改写（#71 回归锚点）")
+
+    def test_n2_no_persona_path_renders_verbatim_original_blocks(self):
+        """人设根本不在场（无 cast、无自定义参与者）⇒ 两个块都必须逐字出现。"""
+        v = self.build("victim", None)
+        self.assertIn(self.TEACHER_ORIGINAL, v, "无 cast 受害者提示词里原文求助块丢了")
+        self.assertNotIn("不会当场答应去找老师", v)
+        b = self.build("bully", None)
+        self.assertIn(self.BULLY_SPOTLIGHT_ORIGINAL, b, "无 cast 霸凌者提示词里原文聚光灯句丢了")
+        for role in ROLES:
+            self.assertNotIn(self.OCCASION_MARK, self.build(role, None),
+                             f"{role} 无 cast（stance=neutral）却拿到了场合条")
+
+    # ---------- F1：受害者求助权威轴 ----------
+    def test_f1_firm_victim_teacher_block_swapped_soft_cells_kept(self):
+        firm_cells = 0
+        for i, sc in enumerate(self.scenarios):
+            st = self.stance(sc, "victim")
+            sp = self.build("victim", sc)
+            if st == "firm":
+                firm_cells += 1
+                self.assertNotIn(self.TEACHER_ORIGINAL, sp,
+                                 f"s{i+1} victim/firm 仍在教「老师安慰你→倾诉」（F1 回归）")
+                self.assertIn("不会当场答应去找老师", sp,
+                              f"s{i+1} victim/firm 丢了求助轴（F1 未落地）")
+                # 仍在回应老师，不是改成「不理老师」
+                self.assertIn("要根据老师的具体话语回应", sp, f"s{i+1} victim/firm 丢了回应老师这条")
+            else:
+                self.assertIn(self.TEACHER_ORIGINAL, sp,
+                              f"s{i+1} victim/{st} 的求助块被无端改写（只允许 firm 变）")
+        # 防空断言：8 情景里必须真有 firm 受害者格子，否则上面的分支等于没跑
+        self.assertGreaterEqual(firm_cells, 1, "8 情景里没有 victim/firm 格子，F1 判据退化")
+
+    def test_f1_only_firm_branch_exists(self):
+        """soft/indirect 明确**不开**新分支（无实测缺陷就不扩大改动面）。"""
+        self.assertEqual(sorted(PR._VICTIM_TEACHER_TEXT), ["firm", "neutral"],
+                         "求助块出现了 firm/neutral 之外的立场键，需重新给理由")
+
+    # ---------- F2：霸凌者当众/幕后 + 场合轴 ----------
+    def test_f2_indirect_bully_has_no_face_to_face_spotlight(self):
+        indirect_cells = 0
+        for i, sc in enumerate(self.scenarios):
+            st = self.stance(sc, "bully")
+            sp = self.build("bully", sc)
+            if st == "indirect":
+                indirect_cells += 1
+                self.assertNotIn(self.BULLY_SPOTLIGHT_ORIGINAL, sp,
+                                 f"s{i+1} bully/indirect 仍在教当众加剧尴尬（F2b 回归）")
+                for m in ("起哄围观", "你可能借机加剧尴尬", "让受害者更加无地自容"):
+                    self.assertNotIn(m, sp, f"s{i+1} bully/indirect 残留当面指令：{m}")
+                self.assertIn("你越不把话说破", sp, f"s{i+1} bully/indirect 丢了幕后版聚光灯句")
+                self.assertIn(self.OCCASION_MARK, sp, f"s{i+1} bully/indirect 丢了场合条（F2a）")
+            else:
+                self.assertIn(self.BULLY_SPOTLIGHT_ORIGINAL, sp,
+                              f"s{i+1} bully/{st} 的聚光灯句被无端改写（只允许 indirect 变）")
+                self.assertNotIn(self.OCCASION_MARK, sp,
+                                 f"s{i+1} bully/{st} 不该拿到场合条")
+        self.assertGreaterEqual(indirect_cells, 1, "8 情景里没有 bully/indirect 格子，F2 判据退化")
+
+    def test_f2_occasion_axis_is_bully_and_stance_gated(self):
+        """任务#74（PM Major-1）：场合条为 **role=bully 且 stance=indirect** 双门控。
+
+        原口径「任何角色只要人设判成 indirect 就给场合条」会把幕后操控者口吻塞给
+        自定义受害者/旁观者。收紧后：
+        ① bully|indirect 仍拿到场合条、无当面挑衅文案、发言硬约束不被挤掉；
+        ② victim/bystander_a/bystander_b 即使被判成 indirect 也**不得**拿到场合条；
+        ③ 所有角色都不许出现当面挑衅类指令。
+        """
+        indirect_persona = _cast_persona(self.scenarios[5], "bully")   # s6：当面客气/暗示/背后操控
+        self.assertEqual(L.classify_persona(indirect_persona)[1], "indirect")
+        for role in ROLES:
+            sc = {"title": "放学路上", "description": "几名学生围住一名同学要钱，老师不在场。",
+                  "level": 4, "cast": {role: {"name": "某某", "role_name": role,
+                                              "personality": indirect_persona}}}
+            sp = self.build(role, sc)
+            for m in self.FACE_TO_FACE_MARKS:
+                self.assertNotIn(m, sp, f"{role}/indirect 提示词里出现当面挑衅类文案：{m}")
+            if role == "bully":
+                self.assertIn(self.OCCASION_MARK, sp, "bully/indirect 没拿到场合条")
+                self.assertTrue("本轮你一定开口" in sp or "本轮你必须开口" in sp,
+                                "bully/indirect 的发言硬约束被场合条挤掉了")
+                self.assertNotIn("你别说话", sp)
+                self.assertNotIn("保持沉默", sp)
+            else:
+                self.assertNotIn(self.OCCASION_MARK, sp,
+                                 f"{role}/indirect 不该拿到霸凌者的场合条（Major-1 双门控）")
+
+    def test_f2_indirect_spotlight_has_no_silence_reading(self):
+        """幕后版聚光灯句不许写成「不开口/不说话」：本轮由你发言是硬约束。"""
+        line = PR._BULLY_SPOTLIGHT_TEXT["indirect"]
+        for bad in ("不亲自开口", "不说话", "别开口", "沉默"):
+            self.assertNotIn(bad, line, f"indirect 聚光灯句会被读成不发言：{bad}")
+
+    def test_major2_decision_and_tendency_overlay_keeps_f1_f2_and_no_homogenization(self):
+        """任务#74（PM Major-2）：生产同框叠加 `decision` + `reaction_tendency` 的回归。
+
+        Rework71 其余用例只验证静态提示词；生产路径 `supervisor.py:555-569` 会同时传入
+        decision 与 reaction_tendency。本用例覆盖两类变化格：
+          · victim|firm（s8）—— F1 求助轴；
+          · bully|indirect（s6）—— F2 聚光灯/场合轴。
+        断言：
+          ① 不出现「优先于其他行为建议 / 你只负责表达 / 不得自由发挥」这类收回创作权的措辞；
+          ② stance 分支净增仍 ≤ 220 B（与既有预算口径同源，不因叠加 decision 而放大）；
+          ③ 同一情景四个角色的渲染件不得逐字相同（不新增角色间同质化）。
+        """
+        cases = ((5, "bully", "low_intensity_taunt", "indirect"),
+                 (7, "victim", "seek_help", "firm"))
+        forbidden = ("优先于其他行为建议", "你只负责表达", "不得自由发挥")
+        tables = (PR._VICTIM_TEACHER_TEXT, PR._BULLY_SPOTLIGHT_TEXT)
+
+        for idx, role, tendency, expected_stance in cases:
+            sc = self.scenarios[idx]
+            self.assertEqual(self.stance(sc, role), expected_stance,
+                             f"s{idx+1}/{role} 立场已变，叠加用例失焦")
+            decision = {"reaction_tendency": tendency, "should_speak": True}
+            sp = self.build(role, sc, decision=decision, reaction_tendency=tendency)
+            for phrase in forbidden:
+                self.assertNotIn(phrase, sp,
+                                 f"s{idx+1}/{role} 叠加 decision 后出现收回创作权措辞：{phrase}")
+            if role == "bully":
+                self.assertIn("你越不把话说破", sp, "s6 bully/indirect 叠加后丢了幕后聚光灯句")
+                self.assertIn(self.OCCASION_MARK, sp, "s6 bully/indirect 叠加后丢了场合条")
+            else:
+                self.assertIn("不会当场答应去找老师", sp, "s8 victim/firm 叠加后丢了求助轴")
+
+            saved = [dict(t) for t in tables]
+            try:
+                for t in tables:
+                    for k in list(t):
+                        if k != "neutral":
+                            t[k] = t["neutral"]
+                base = self.build(role, sc, decision=decision, reaction_tendency=tendency)
+            finally:
+                for t, s in zip(tables, saved):
+                    t.clear()
+                    t.update(s)
+            growth = len(sp.encode("utf-8")) - len(base.encode("utf-8"))
+            self.assertGreater(abs(growth), 0,
+                               f"s{idx+1}/{role} 叠加用例没有踩到 stance 分支，判据退化")
+            self.assertLessEqual(abs(growth), self.STANCE_GROWTH_BUDGET_BYTES,
+                                 f"s{idx+1}/{role}({expected_stance}) 叠加 decision 后 "
+                                 f"stance 净增 {growth} B，超出 {self.STANCE_GROWTH_BUDGET_BYTES} B")
+
+        # 同一情景、同一 decision 下，四个角色不得渲染成逐字相同的提示词
+        for idx in (5, 7):
+            decision = {"reaction_tendency": "respond", "should_speak": True}
+            prompts = {role: self.build(role, self.scenarios[idx],
+                                        decision=decision, reaction_tendency="respond")
+                       for role in ROLES}
+            self.assertEqual(len(set(prompts.values())), len(ROLES),
+                             f"s{idx+1} 不同角色渲染件出现逐字相同（角色间同质化）")
+
+    # ---------- 长度：stance 分支的净增必须可核查且不超预算 ----------
+    def test_budget_stance_branch_growth_per_cell(self):
+        """同一格「按立场渲染」减「强制 neutral 渲染」= 本轮 stance 分支的净增字节。
+
+        做法：临时把两张表的非 neutral 分支替换成 neutral 原文，重渲染同一格，再还原。
+        这样基线与实验组只差 stance 文案，不受情景数据长度变化干扰。
+        """
+        tables = (PR._VICTIM_TEACHER_TEXT, PR._BULLY_SPOTLIGHT_TEXT)
+        saved = [dict(t) for t in tables]
+        try:
+            for t in tables:
+                for k in list(t):
+                    if k != "neutral":
+                        t[k] = t["neutral"]
+            base = {(sc["id"] if "id" in sc else i, role):
+                    len(self.build(role, sc).encode("utf-8"))
+                    for i, sc in enumerate(self.scenarios) for role in ROLES}
+        finally:
+            for t, s in zip(tables, saved):
+                t.clear()
+                t.update(s)
+        worst = []
+        for i, sc in enumerate(self.scenarios):
+            for role in ROLES:
+                n = len(self.build(role, sc).encode("utf-8"))
+                d = n - base[(sc["id"] if "id" in sc else i, role)]
+                if d:
+                    worst.append((d, i + 1, role, self.stance(sc, role)))
+        for d, sid, role, st in worst:
+            self.assertLessEqual(abs(d), self.STANCE_GROWTH_BUDGET_BYTES,
+                                 f"s{sid}/{role}({st}) stance 分支净增 {d} B，超出 {self.STANCE_GROWTH_BUDGET_BYTES} B")
+        # 只有 firm 受害者与 indirect 霸凌者两类格子允许有增量
+        self.assertEqual({(r, s) for _, _, r, s in worst},
+                         {("victim", "firm"), ("bully", "indirect")},
+                         f"出现了预期之外的变化格子：{sorted(worst)}")
 
 
 if __name__ == "__main__":

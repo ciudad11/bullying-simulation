@@ -16,7 +16,7 @@ Step 1 更新(2026-05-28):
 """
 
 from typing import List, Dict, Optional, Tuple
-from .state import SharedState, Message, InterventionRecord, OBVQState
+from .state import SharedState, InterventionRecord, OBVQState
 
 
 # ============================================================
@@ -1468,17 +1468,9 @@ def evaluate_intervention(state: SharedState, intervention_content: str, llm_cli
     state.last_intervention_round = state.round
     state.intervention_count += 1
 
-    import datetime
-    msg = Message(
-        sender_id="teacher",
-        sender_name="张老师",
-        role="teacher",
-        content=intervention_content,
-        timestamp=datetime.datetime.now().strftime("%H:%M:%S"),
-        round=state.round,
-    )
-    state.messages.append(msg)
-
+    # 任务#82：本函数不再向 state.messages 追加教师消息。
+    # 唯一注入点在调用方 MultiAgentRunner.intervene（graph_builder.py），
+    # 旧版这里再 append 一次会让同一条干预在 6 条窗口里重复占 2 槽（hist_n +2）。
     obvq_info = state.obvq_state.get_score_info()
 
     _iv_rec = intervention_record.to_dict()

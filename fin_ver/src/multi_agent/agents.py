@@ -10,7 +10,8 @@ from datetime import datetime
 
 from .state import SharedState, Message, AgentMemory
 from .llm_client import LLMClient, get_preset_response
-from .prompts import build_system_prompt, build_conversation_context
+from .prompts import (build_system_prompt, build_conversation_context,
+                      is_aggressive_follower_context)
 
 
 # ============================================================
@@ -552,7 +553,30 @@ class BystanderBAgent(BaseAgent):
         support_norm = getattr(state, 'bystander_support', 0.0)
         retaliation = getattr(state, 'retaliation_risk', 0.0)
 
-        if has_teacher:
+        # 任务#82：攻击型从众门控（s6 情景 + 攻击词人设）在 has_teacher 之前求值。
+        # 产品裁定（用户投诉「吴迪跑偏成懦弱附和」）：老师在场不等于人设方向翻转。
+        # bf 命中时按攻击型从众继续，老师明确制止只收敛气势（不带头顶撞），
+        # 不退缩成打哈哈/装不知情/帮受害者说话；其余 7 情景与非攻击人设的
+        # has_teacher→avoid 完全不变（下方 elif 保持原样）。
+        aggressive_follower = is_aggressive_follower_context(
+            "bystander_b", getattr(state, "scenario_title", ""),
+            getattr(state, "role_map", None))
+
+        if (aggressive_follower and bully_count >= 1
+                and support_norm < 0.4 and retaliation < 0.5):
+            # 任务#77 B-4／任务#79 Major-1／任务#82：
+            #   ① bully_count>=1：确实有人挑头（与 B-3「有人挑头，你就跟着起哄」一致）；
+            #   ② support_norm<0.4：群体支持规范尚未建立（不抢占 R6 的 resist_follow）；
+            #   ③ retaliation<0.5：报复风险不高（不抢占 R6 的 silent_resist）。
+            should_speak = True
+            tendency = "follow_majority"
+            if has_teacher:
+                reasoning = ("攻击型从众：老师在场只收敛气势、不带头顶撞，"
+                             "仍跟着挑头人一起施压，不退缩成打哈哈或装不知情")
+            else:
+                reasoning = "攻击型从众：已有人挑头、群体支持未建立且报复风险低，跟着起哄施压"
+
+        elif has_teacher:
             reasoning = "老师在场，不敢吱声、回避"
             tendency = "avoid"
 

@@ -226,6 +226,9 @@
                 </div>
 
                 <!-- 3. 参与者档案 (最下面) -->
+                <!-- 下方四句「性格较为XX」只是初始/fallback 文案（选中情景没有 cast 或
+                     personality 为空时保留原样）；选定情景后由 app.js 的 refreshPersonaDisplay()
+                     按情景 cast 覆写姓名与性格，对应的默认句常量见 js/app.js 的 DEFAULT_PERSONA_TEXTS。 -->
                 <div class="panel participants-panel">
                     <div class="panel-header">
                         <h2>👥 参与者档案</h2>
@@ -680,6 +683,6 @@
         </div>
     </div>
 
-    <script src="/js/app.js?v=2026111005"></script>
+    <script src="/js/app.js?v=2026112001"></script>
 </body>
 </html>
